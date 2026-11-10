@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.npm-cache/
+.electron-cache/
+.eb-cache/
+.userdata/
+.cache/
+.data/
+build/icon.iconset/
+.DS_Store
+*.log

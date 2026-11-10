@@ -1,0 +1,40 @@
+{
+  "name": "ssh-control",
+  "productName": "SSH Control",
+  "version": "1.0.0",
+  "description": "Хранилище SSH-ключей и данных серверов для macOS",
+  "main": "main/main.js",
+  "author": "Aleksey",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder --mac --dir",
+    "dist": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.sshcontrol.app",
+    "productName": "SSH Control",
+    "electronDist": "node_modules/electron/dist",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null
+    },
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  }
+}

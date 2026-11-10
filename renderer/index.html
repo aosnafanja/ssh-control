@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru" data-theme="system">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>SSH Control</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Экран разблокировки -->
+  <div id="unlock" class="overlay hidden">
+    <div class="unlock-card">
+      <div class="brand-logo">🔑</div>
+      <h1>SSH Control</h1>
+      <p class="muted">Хранилище заблокировано. Введите пароль.</p>
+      <input type="password" id="unlock-password" placeholder="Пароль" autocomplete="off">
+      <div class="form-error" id="unlock-error"></div>
+      <button class="btn primary w100" id="unlock-btn">Разблокировать</button>
+    </div>
+  </div>
+
+  <!-- Приложение -->
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="sidebar-drag"></div>
+      <div class="brand">
+        <div class="brand-logo">🔑</div>
+        <div class="brand-name">SSH Control</div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item" data-action="nav" data-view="keys">
+          <svg viewBox="0 0 24 24" class="ico"><path d="M15.5 7.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="m21 2-4 4"/><path d="M9.5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/><path d="M14.5 11.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/><path d="m13 7 4 4"/><path d="m7 13 4 4"/><path d="m2 22 5-5"/><path d="M2 17a5 5 0 0 1 5 5"/></svg>
+          <span>Ключи</span>
+          <span class="count" id="keys-count"></span>
+        </button>
+        <button class="nav-item" data-action="nav" data-view="servers">
+          <svg viewBox="0 0 24 24" class="ico"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+          <span>Серверы</span>
+          <span class="count" id="servers-count"></span>
+        </button>
+        <button class="nav-item" data-action="nav" data-view="settings">
+          <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          <span>Настройки</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="data-dir" id="data-dir" title=""></div>
+        <button class="lock-btn" data-action="lock">
+          <svg viewBox="0 0 24 24" class="ico"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <span>Заблокировать</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <!-- Ключи -->
+      <section id="view-keys" class="view">
+        <header class="view-header">
+          <div>
+            <h2>SSH-ключи</h2>
+            <p class="muted">Ключи из папки <span class="mono">~/.ssh</span></p>
+          </div>
+          <div class="header-actions">
+            <div class="search">
+              <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="keys-search" placeholder="Поиск…">
+            </div>
+            <button class="btn primary" data-action="new-key">
+              <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg>
+              Новый ключ
+            </button>
+          </div>
+        </header>
+        <div class="view-body" id="keys-list"></div>
+      </section>
+
+      <!-- Серверы -->
+      <section id="view-servers" class="view hidden">
+        <header class="view-header">
+          <div>
+            <h2>Серверы</h2>
+            <p class="muted">Данные для подключения по SSH</p>
+          </div>
+          <div class="header-actions">
+            <div class="search">
+              <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="servers-search" placeholder="Поиск…">
+            </div>
+            <button class="btn primary" data-action="new-server">
+              <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg>
+              Новый сервер
+            </button>
+          </div>
+        </header>
+        <div class="group-chips" id="group-chips"></div>
+        <div class="view-body" id="servers-list"></div>
+      </section>
+
+      <!-- Настройки -->
+      <section id="view-settings" class="view hidden">
+        <header class="view-header">
+          <div>
+            <h2>Настройки</h2>
+            <p class="muted">Хранилище, безопасность и оформление</p>
+          </div>
+        </header>
+        <div class="view-body settings-body">
+          <div class="settings-card">
+            <h3>Данные</h3>
+            <p class="muted">Все данные хранятся в одной папке — её легко скопировать на другой Mac.</p>
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-title">Папка хранилища</div>
+                <div class="mono path" id="settings-datadir"></div>
+              </div>
+              <div class="setting-actions">
+                <button class="btn ghost" data-action="change-dir">Изменить</button>
+                <button class="btn ghost" data-action="open-dir">Открыть</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-title">Резервная копия</div>
+                <div class="muted">Сохранить файл <span class="mono">data.json</span> в выбранное место.</div>
+              </div>
+              <div class="setting-actions">
+                <button class="btn ghost" data-action="export-backup">Создать копию</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>Безопасность</h3>
+            <p class="muted">Пароль шифрует всё хранилище (AES-256-GCM). Без пароля данные восстановить невозможно.</p>
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-title" id="pw-title">Пароль не установлен</div>
+                <div class="muted" id="pw-desc">Серверы и секреты хранятся в открытом виде.</div>
+              </div>
+              <div class="setting-actions" id="pw-actions">
+                <button class="btn ghost" data-action="set-password">Установить пароль</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>Оформление</h3>
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-title">Тема</div>
+              </div>
+              <div class="setting-actions">
+                <div class="segmented" id="theme-seg">
+                  <button data-val="system" class="active">Система</button>
+                  <button data-val="light">Светлая</button>
+                  <button data-val="dark">Тёмная</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <h3>SSH</h3>
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-title">Папка ~/.ssh</div>
+                <div class="muted">Открыть в Finder, чтобы посмотреть файлы ключей.</div>
+              </div>
+              <div class="setting-actions">
+                <button class="btn ghost" data-action="open-ssh">Открыть</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
