@@ -8,10 +8,14 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "test": "node --test",
     "package": "electron-builder --mac --dir",
     "dist": "electron-builder --mac"
   },
   "devDependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-search": "^0.15.0",
+    "@xterm/xterm": "^5.5.0",
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0"
   },
@@ -19,6 +23,7 @@
     "appId": "com.sshcontrol.app",
     "productName": "SSH Control",
     "electronDist": "node_modules/electron/dist",
+    "npmRebuild": false,
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns",
@@ -36,5 +41,8 @@
     "directories": {
       "output": "dist"
     }
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
   }
 }

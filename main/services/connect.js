@@ -20,25 +20,40 @@ function expandTilde(p) {
   return p;
 }
 
-function buildCommand(server) {
-  if (!server || !server.host) return '';
-  const parts = ['ssh'];
+// Собирает массив аргументов ssh без интерпретации оболочкой.
+// Пользовательский текст (extraArgs, host, user) идёт отдельными аргументами,
+// поэтому точка инъекции закрыта: execFile/spawn получают argv, а не строку.
+function buildArgs(server) {
+  if (!server || !server.host) return [];
+  const args = [];
   const port = Number(server.port) || 22;
-  if (port !== 22) parts.push('-p', String(port));
+  if (port !== 22) args.push('-p', String(port));
   if (server.authMethod === 'key' && server.keyPath) {
-    parts.push('-i', expandTilde(server.keyPath));
-    parts.push('-o', 'IdentitiesOnly=yes');
+    args.push('-i', expandTilde(server.keyPath));
+    args.push('-o', 'IdentitiesOnly=yes');
   }
   if (server.extraArgs && String(server.extraArgs).trim()) {
-    parts.push(...String(server.extraArgs).trim().split(/\s+/));
+    args.push(...String(server.extraArgs).trim().split(/\s+/));
   }
   const user = server.user ? `${server.user}@` : '';
-  parts.push(`${user}${server.host}`);
-  return parts.join(' ');
+  args.push(`${user}${server.host}`);
+  return args;
+}
+
+function buildCommand(server) {
+  const args = buildArgs(server);
+  if (!args.length) return '';
+  return ['ssh', ...args].join(' ');
+}
+
+function buildAliasArgs(alias) {
+  const name = String(alias || '').trim();
+  return name ? [name] : [];
 }
 
 function buildAliasCommand(alias) {
-  return `ssh ${String(alias || '').trim()}`;
+  const args = buildAliasArgs(alias);
+  return ['ssh', ...args].join(' ');
 }
 
 async function runCommand(cmd) {
@@ -54,4 +69,4 @@ async function run(server) {
   return runCommand(cmd);
 }
 
-module.exports = { buildCommand, run, buildAliasCommand, runCommand };
+module.exports = { buildArgs, buildCommand, buildAliasArgs, buildAliasCommand, expandTilde, run, runCommand };

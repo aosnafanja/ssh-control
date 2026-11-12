@@ -745,14 +745,8 @@ function removePasswordModal() {
 }
 
 /* ---------- actions ---------- */
-async function connectServer(server) {
-  try {
-    const cmd = await bridge.connect(server);
-    toast('Terminal запущен');
-    void cmd;
-  } catch (err) {
-    toast(err.message || 'Не удалось запустить Terminal', 'error');
-  }
+function connectServer(server) {
+  window.Term.openServer(server);
 }
 async function copyServerCommand(server) {
   try {
@@ -816,9 +810,7 @@ document.addEventListener('click', async (e) => {
 
   if (action === 'open-config') { bridge.openConfig(); return; }
   if (action === 'alias-connect') {
-    const alias = actionEl.dataset.alias;
-    try { await bridge.connectAlias(alias); toast('Terminal запущен'); }
-    catch (err) { toast(err.message || 'Не удалось запустить Terminal', 'error'); }
+    window.Term.openAlias(actionEl.dataset.alias);
     return;
   }
   if (action === 'alias-copy-cmd') {

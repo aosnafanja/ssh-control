@@ -36,6 +36,14 @@ contextBridge.exposeInMainWorld('api', {
   buildCommand: (server) => ipcRenderer.invoke('connect:command', server),
   connect: (server) => ipcRenderer.invoke('connect:run', server),
 
+  // Terminal
+  createTerminal: (payload) => ipcRenderer.invoke('term:create', payload),
+  writeTerminal: (id, data) => ipcRenderer.invoke('term:write', id, data),
+  resizeTerminal: (id, cols, rows) => ipcRenderer.invoke('term:resize', id, cols, rows),
+  killTerminal: (id) => ipcRenderer.invoke('term:kill', id),
+  onTermData: (cb) => { ipcRenderer.on('term:data', (_e, id, data) => cb(id, data)); },
+  onTermExit: (cb) => { ipcRenderer.on('term:exit', (_e, id, code) => cb(id, code)); },
+
   // Misc
   getHome: () => ipcRenderer.invoke('app:home'),
 
