@@ -293,6 +293,9 @@ body {
 .alias-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .alias-actions .btn .mono { font-size: 0.85em; }
 
+.btn.has-alias { color: var(--accent); border-color: rgba(10, 132, 255, 0.45); }
+.btn.has-alias:hover { background: var(--accent-soft); }
+
 /* ---------- Servers ---------- */
 .server-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
 .server-card { padding: 0; overflow: hidden; cursor: default; }

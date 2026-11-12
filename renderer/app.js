@@ -18,7 +18,8 @@ const ICONS = {
   key: '<svg viewBox="0 0 24 24" class="ico"><path d="M15.5 7.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="m21 2-4 4"/><path d="M9.5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/><path d="M14.5 11.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/><path d="m13 7 4 4"/><path d="m7 13 4 4"/><path d="m2 22 5-5"/><path d="M2 17a5 5 0 0 1 5 5"/></svg>',
   chevron: '<svg viewBox="0 0 24 24" class="ico chevron"><path d="m6 9 6 6 6-6"/></svg>',
   lock: '<svg viewBox="0 0 24 24" class="ico"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
-  server: '<svg viewBox="0 0 24 24" class="ico"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>'
+  server: '<svg viewBox="0 0 24 24" class="ico"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>',
+  tag: '<svg viewBox="0 0 24 24" class="ico"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/></svg>'
 };
 
 const state = {
@@ -274,6 +275,7 @@ function serverCard(s) {
   const authBadge = s.authMethod === 'password'
     ? '<span class="badge">🔒 Пароль</span>'
     : '<span class="badge">🔑 ' + esc(keyLabel(s.keyPath)) + '</span>';
+  const hasAlias = !!serverHasAlias(s);
   return `
     <div class="card server-card" data-server-id="${esc(s.id)}">
       <div class="server-top">
@@ -292,6 +294,7 @@ function serverCard(s) {
         </div>
       </div>
       <div class="server-foot">
+        <button class="btn ghost${hasAlias ? ' has-alias' : ''}" data-action="server-alias" data-id="${esc(s.id)}" title="${hasAlias ? 'Редактировать псевдоним' : 'Создать псевдоним в ~/.ssh/config'}">${ICONS.tag} ${hasAlias ? 'Псевдоним ✓' : 'Псевдоним'}</button>
         <button class="btn ghost" data-action="server-copy-cmd" data-id="${esc(s.id)}">${ICONS.copy} Команда</button>
         <div class="spacer"></div>
         <button class="btn primary connect-btn" data-action="server-connect" data-id="${esc(s.id)}">${ICONS.terminal} Подключиться</button>
@@ -303,6 +306,31 @@ function keyLabel(keyPath) {
   if (!keyPath) return '—';
   const m = String(keyPath).match(/[^/]+$/);
   return m ? m[0] : keyPath;
+}
+
+function slugify(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function serverHasAlias(server) {
+  const slug = slugify(server.name || server.host);
+  return state.aliases.find((a) =>
+    a.name === slug || (a.hostName && a.hostName === server.host && a.user === server.user)
+  ) || null;
+}
+
+function serverToAlias(server) {
+  return {
+    name: slugify(server.name || server.host) || 'server',
+    hostName: server.host || '',
+    user: server.user || '',
+    port: server.port || '',
+    identityFile: server.authMethod === 'key' ? server.keyPath : '',
+    extra: ''
+  };
 }
 
 function renderSettings() {
@@ -821,6 +849,18 @@ document.addEventListener('click', async (e) => {
   if (action === 'server-delete') { deleteServerModal(findServer(actionEl.dataset.id)); return; }
   if (action === 'server-connect') { connectServer(findServer(actionEl.dataset.id)); return; }
   if (action === 'server-copy-cmd') { copyServerCommand(findServer(actionEl.dataset.id)); return; }
+  if (action === 'server-alias') {
+    const server = findServer(actionEl.dataset.id);
+    if (!server) return;
+    const existing = serverHasAlias(server);
+    if (existing) {
+      const full = await bridge.getHost(existing.name);
+      aliasModal(full || existing);
+    } else {
+      aliasModal(serverToAlias(server));
+    }
+    return;
+  }
 
   // settings
   if (action === 'change-dir') {
