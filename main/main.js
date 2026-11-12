@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu } = require('electron');
 const path = require('path');
 const os = require('os');
 
@@ -11,6 +11,18 @@ const sshConfig = require('./services/sshConfig');
 const terminal = require('./services/terminal');
 
 let mainWindow = null;
+
+// Дефолтное меню Electron вешает ⌘W на «Close Window». Оно нужно встроенному
+// терминалу для закрытия активной split-панели (renderer/terminal.js), поэтому
+// меню собирается явно без пункта «Close Window» — ⌘W свободно для рендера.
+function buildAppMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { role: 'appMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' }
+  ]));
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -40,6 +52,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   storage.init(app.getPath('userData'));
+  buildAppMenu();
   registerIpc();
   createWindow();
 

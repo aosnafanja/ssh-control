@@ -45,6 +45,11 @@
 
   const STATUS_LABELS = { connecting: 'подключение', active: 'подключено', exited: 'завершено', error: 'ошибка' };
 
+  // Модель (flat): вкладка = { key, payload, title, direction, activeKey, panes, host },
+  // панель = { key, term, fitAddon, searchAddon, el, bar, dot, label, body,
+  //            status, sessionId, exitCode, observer }.
+  // key вкладки и key/sessionId панели генерируются в рендере и уходят в main,
+  // чтобы события term:data / term:exit сразу находили свою панель.
   const tabs = new Map(); // key -> tab
   let activeKey = null;
   let seq = 0;
@@ -61,21 +66,39 @@
     return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   }
   function currentPalette() { return THEMES[resolvedTheme()]; }
-  function applyThemeTo(tab) { if (tab.term) tab.term.options.theme = currentPalette(); }
+  function applyThemeTo(tab) { tab.panes.forEach((p) => { if (p.term) p.term.options.theme = currentPalette(); }); }
   function applyThemeAll() { tabs.forEach(applyThemeTo); renderThemeSeg(); }
   function renderThemeSeg() {
     const pref = termThemePreference();
     $$('#term-theme-seg button').forEach((b) => b.classList.toggle('active', b.dataset.val === pref));
   }
 
+  /* ---------- tab / pane helpers ---------- */
+  function activeTab() { return activeKey ? tabs.get(activeKey) : null; }
+  function activePaneOf(tab) {
+    if (!tab || !tab.panes.length) return null;
+    return tab.panes.find((p) => p.key === tab.activeKey) || tab.panes[tab.panes.length - 1];
+  }
+  function activePane() { return activePaneOf(activeTab()); }
+  function findPane(tab, key) { return tab.panes.find((p) => p.key === key) || null; }
+  function findBySessionId(id) {
+    for (const t of tabs.values()) {
+      const p = findPane(t, id);
+      if (p) return p;
+    }
+    return null;
+  }
+
   /* ---------- render ---------- */
   function tabEl(t) {
-    const status = t.status || 'connecting';
+    const ap = activePaneOf(t);
+    const status = (ap && ap.status) || 'connecting';
+    const exitCode = ap ? ap.exitCode : null;
     const label = STATUS_LABELS[status] || STATUS_LABELS.connecting;
     let stateWord = '';
     if (status !== 'active') {
-      stateWord = (status === 'exited' && t.exitCode != null)
-        ? `<span class="term-tab-state">${esc(label)} · код ${esc(t.exitCode)}</span>`
+      stateWord = (status === 'exited' && exitCode != null)
+        ? `<span class="term-tab-state">${esc(label)} · код ${esc(exitCode)}</span>`
         : `<span class="term-tab-state">${esc(label)}</span>`;
     }
     return `
@@ -92,11 +115,25 @@
     if (bar) bar.innerHTML = Array.from(tabs.values()).map(tabEl).join('');
   }
 
+  function renderPaneStatus(pane) {
+    const status = pane.status || 'connecting';
+    pane.dot.className = 'term-status ' + status;
+    const label = STATUS_LABELS[status] || STATUS_LABELS.connecting;
+    pane.label.textContent = (status === 'exited' && pane.exitCode != null)
+      ? label + ' · код ' + pane.exitCode
+      : label;
+  }
+
   function renderStage() {
     const stage = $('#term-stage');
     if (!stage) return;
+    tabs.forEach((t) => {
+      t.host.classList.toggle('hidden', t.key !== activeKey);
+      t.host.classList.toggle('row', t.direction === 'row');
+      t.host.classList.toggle('column', t.direction === 'column');
+      t.panes.forEach((p) => p.el.classList.toggle('active', p.key === t.activeKey));
+    });
     let empty = stage.querySelector('.term-empty');
-    tabs.forEach((t) => t.host.classList.toggle('hidden', t.key !== activeKey));
     if (tabs.size === 0) {
       if (!empty) {
         empty = document.createElement('div');
@@ -112,25 +149,34 @@
 
   function render() { renderTabs(); renderStage(); }
 
-  function fitTab(t) {
-    if (!t || !t.host || !t.fitAddon) return;
-    const w = t.host.offsetWidth;
-    const h = t.host.offsetHeight;
+  function fitPane(pane) {
+    if (!pane || !pane.body || !pane.fitAddon) return;
+    const w = pane.body.offsetWidth;
+    const h = pane.body.offsetHeight;
     if (!w || !h) return;
-    try { t.fitAddon.fit(); } catch (e) { /* ignore */ }
-    if (t.sessionId && t.term.cols && t.term.rows) {
-      bridge.resizeTerminal(t.sessionId, t.term.cols, t.term.rows);
+    try { pane.fitAddon.fit(); } catch (e) { /* ignore */ }
+    if (pane.sessionId && pane.term.cols && pane.term.rows) {
+      bridge.resizeTerminal(pane.sessionId, pane.term.cols, pane.term.rows);
     }
   }
+
+  function fitAll(tab) { if (tab) tab.panes.forEach(fitPane); }
 
   function activate(key) {
     activeKey = key;
     render();
     const t = tabs.get(key);
-    if (t) setTimeout(() => fitTab(t), 0);
+    if (t) setTimeout(() => fitAll(t), 0);
   }
 
-  /* ---------- open / close ---------- */
+  function activatePane(tab, key) {
+    tab.activeKey = key;
+    renderStage();
+    const pane = findPane(tab, key);
+    if (pane) setTimeout(() => fitPane(pane), 0);
+  }
+
+  /* ---------- open / split / close ---------- */
   function serverPayload(server) {
     // В IPC уходит только то, что нужно для сборки argv ssh; пароль сервера
     // и парольная фраза ключа сюда не попадают (вводятся пользователем в PTY).
@@ -166,14 +212,52 @@
   function openTab(payload, title) {
     const stage = $('#term-stage');
     if (!stage) return;
-    // id сессии генерируется в рендере и уходит в main: события data/exit,
-    // пришедшие раньше резолва term:create (напр. мгновенный отказ ssh),
-    // сразу находят свою вкладку, а не теряются.
     const key = 't' + (seq++) + '_' + Date.now().toString(36);
 
     const host = document.createElement('div');
-    host.className = 'term-host';
+    host.className = 'term-panes';
     stage.appendChild(host);
+
+    const tab = { key, payload, title, direction: null, activeKey: null, panes: [], host };
+    tabs.set(key, tab);
+
+    createPane(tab, payload);
+    activate(key);
+  }
+
+  function createPane(tab, payload) {
+    const key = 'p' + (seq++) + '_' + Date.now().toString(36);
+
+    const el = document.createElement('div');
+    el.className = 'term-pane';
+    el.dataset.key = key;
+    el.dataset.action = 'term-pane-focus';
+    el.setAttribute('role', 'tabpanel');
+
+    const bar = document.createElement('div');
+    bar.className = 'term-pane-bar';
+    const dot = document.createElement('span');
+    dot.className = 'term-status connecting';
+    dot.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.className = 'term-pane-state';
+    label.textContent = STATUS_LABELS.connecting;
+    const close = document.createElement('button');
+    close.className = 'term-pane-close';
+    close.dataset.action = 'term-pane-close';
+    close.dataset.key = key;
+    close.setAttribute('title', 'Закрыть панель');
+    close.setAttribute('aria-label', 'Закрыть панель');
+    close.textContent = '×';
+    bar.appendChild(dot);
+    bar.appendChild(label);
+    bar.appendChild(close);
+
+    const body = document.createElement('div');
+    body.className = 'term-pane-body';
+    el.appendChild(bar);
+    el.appendChild(body);
+    tab.host.appendChild(el);
 
     const term = new Terminal({
       cursorBlink: true,
@@ -186,73 +270,109 @@
     const searchAddon = new SearchAddon();
     term.loadAddon(fitAddon);
     term.loadAddon(searchAddon);
-    term.open(host);
+    term.open(body);
 
-    const tab = { key, payload, title, term, fitAddon, searchAddon, host, status: 'connecting', sessionId: key, exitCode: null, observer: null };
-    tabs.set(key, tab);
+    const pane = { key, term, fitAddon, searchAddon, el, bar, dot, label, body, status: 'connecting', sessionId: key, exitCode: null, observer: null };
+    tab.panes.push(pane);
 
-    // Ввод с клавиатуры и вставка (Cmd+V) уходят в PTY — иначе терминал read-only.
-    term.onData((data) => { if (tab.sessionId) bridge.writeTerminal(tab.sessionId, data); });
+    // Ввод с клавиатуры и вставка (Cmd+V) уходят в PTY только этой панели —
+    // у каждой панели свой onData → свой writeTerminal(sessionId).
+    term.onData((data) => { if (pane.sessionId) bridge.writeTerminal(pane.sessionId, data); });
 
-    const observer = new ResizeObserver(() => fitTab(tab));
-    observer.observe(host);
-    tab.observer = observer;
+    const observer = new ResizeObserver(() => fitPane(pane));
+    observer.observe(body);
+    pane.observer = observer;
 
-    activate(key);
+    activatePane(tab, key);
     setTimeout(() => term.focus(), 40);
 
     bridge.createTerminal(Object.assign({}, payload, { id: key, cols: 80, rows: 24 }))
       .then(() => {
-        if (tabs.has(key)) fitTab(tab);
+        if (findPane(tab, key)) fitPane(pane);
       })
       .catch((err) => {
-        if (!tabs.has(key)) return;
-        tab.status = 'error';
+        if (!findPane(tab, key)) return;
+        pane.status = 'error';
+        renderPaneStatus(pane);
         renderTabs();
         term.write('\r\n[Ошибка подключения]\r\n');
         toast(err && err.message ? err.message : 'Не удалось запустить сессию', 'error');
       });
   }
 
+  function splitPane(direction) {
+    const tab = activeTab();
+    if (!tab) return;
+    // Первое разделение задаёт направление; последующие добавляют в том же.
+    if (!tab.direction) tab.direction = direction;
+    createPane(tab, tab.payload);
+  }
+
+  function closePane(tab, key) {
+    const idx = tab.panes.findIndex((p) => p.key === key);
+    if (idx < 0) return;
+    const pane = tab.panes[idx];
+    tab.panes.splice(idx, 1);
+    if (pane.sessionId) bridge.killTerminal(pane.sessionId);
+    if (pane.observer) pane.observer.disconnect();
+    try { pane.term.dispose(); } catch (e) { /* ignore */ }
+    if (pane.el && pane.el.parentNode) pane.el.parentNode.removeChild(pane.el);
+
+    if (tab.panes.length === 0) { closeTab(tab.key); return; }
+    if (tab.activeKey === key) {
+      const next = tab.panes[idx] || tab.panes[idx - 1];
+      tab.activeKey = next ? next.key : null;
+    }
+    renderStage();
+    const ap = activePaneOf(tab);
+    if (ap) setTimeout(() => { fitPane(ap); ap.term.focus(); }, 0);
+  }
+
   function closeTab(key) {
     const t = tabs.get(key);
     if (!t) return;
     tabs.delete(key);
-    if (t.sessionId) bridge.killTerminal(t.sessionId);
-    if (t.observer) t.observer.disconnect();
-    try { t.term.dispose(); } catch (e) { /* ignore */ }
+    for (const pane of t.panes) {
+      if (pane.sessionId) bridge.killTerminal(pane.sessionId);
+      if (pane.observer) pane.observer.disconnect();
+      try { pane.term.dispose(); } catch (e) { /* ignore */ }
+    }
     if (t.host && t.host.parentNode) t.host.parentNode.removeChild(t.host);
     if (activeKey === key) activeKey = Array.from(tabs.keys()).pop() || null;
     render();
     if (activeKey) {
       const next = tabs.get(activeKey);
-      if (next) setTimeout(() => fitTab(next), 0);
+      const ap = activePaneOf(next);
+      if (ap) setTimeout(() => fitPane(ap), 0);
     }
   }
 
-  function findBySessionId(id) {
-    for (const t of tabs.values()) if (t.sessionId === id) return t;
-    return null;
+  function switchPane(tab, delta) {
+    if (!tab || tab.panes.length < 2) return;
+    let idx = tab.panes.findIndex((p) => p.key === tab.activeKey);
+    if (idx < 0) idx = 0;
+    const next = tab.panes[(idx + delta + tab.panes.length) % tab.panes.length];
+    activatePane(tab, next.key);
+    setTimeout(() => next.term.focus(), 0);
   }
 
   /* ---------- pty events ---------- */
   function onData(id, data) {
-    const t = findBySessionId(id);
-    if (!t) return;
-    t.term.write(data);
-    if (t.status === 'connecting') { t.status = 'active'; renderTabs(); }
+    const p = findBySessionId(id);
+    if (!p) return;
+    p.term.write(data);
+    if (p.status === 'connecting') { p.status = 'active'; renderPaneStatus(p); renderTabs(); }
   }
   function onExit(id, code) {
-    const t = findBySessionId(id);
-    if (!t) return;
-    t.status = 'exited';
-    t.exitCode = code;
+    const p = findBySessionId(id);
+    if (!p) return;
+    p.status = 'exited';
+    p.exitCode = code;
+    renderPaneStatus(p);
     renderTabs();
   }
 
   /* ---------- search ---------- */
-  function activeTab() { return activeKey ? tabs.get(activeKey) : null; }
-
   function searchOptions() {
     const regexEl = $('#term-regex');
     return {
@@ -264,13 +384,13 @@
   }
 
   function doSearch(incremental) {
-    const t = activeTab();
+    const p = activePane();
     const input = $('#term-search-input');
-    if (!t || !input) return;
+    if (!p || !input) return;
     const q = input.value;
-    if (!q) { t.searchAddon.clearDecorations(); return; }
+    if (!q) { p.searchAddon.clearDecorations(); return; }
     const opts = Object.assign({}, searchOptions(), { incremental: !!incremental });
-    t.searchAddon.findNext(q, opts);
+    p.searchAddon.findNext(q, opts);
   }
 
   function toggleSearch() {
@@ -283,8 +403,8 @@
   }
 
   function clearSearch() {
-    const t = activeTab();
-    if (t) t.searchAddon.clearDecorations();
+    const p = activePane();
+    if (p) p.searchAddon.clearDecorations();
     const input = $('#term-search-input');
     if (input) input.value = '';
   }
@@ -304,18 +424,33 @@
 
       if (action === 'term-select') { activate(el.dataset.key); return; }
       if (action === 'term-close') { closeTab(el.dataset.key); return; }
+      if (action === 'term-split-v') { splitPane('row'); return; }
+      if (action === 'term-split-h') { splitPane('column'); return; }
+      if (action === 'term-pane-focus') {
+        const t = activeTab();
+        if (!t) return;
+        activatePane(t, el.dataset.key);
+        const p = findPane(t, el.dataset.key);
+        if (p) setTimeout(() => p.term.focus(), 0);
+        return;
+      }
+      if (action === 'term-pane-close') {
+        const t = activeTab();
+        if (t) closePane(t, el.dataset.key);
+        return;
+      }
       if (action === 'term-search-toggle') { toggleSearch(); return; }
       if (action === 'term-search-next') { doSearch(false); return; }
       if (action === 'term-search-prev') {
-        const t = activeTab();
+        const p = activePane();
         const input = $('#term-search-input');
-        if (t && input && input.value) t.searchAddon.findPrevious(input.value, searchOptions());
+        if (p && input && input.value) p.searchAddon.findPrevious(input.value, searchOptions());
         return;
       }
       if (action === 'nav' && el.dataset.view === 'terms') {
         renderThemeSeg();
         const t = activeTab();
-        if (t) setTimeout(() => fitTab(t), 0);
+        if (t) setTimeout(() => fitAll(t), 0);
         return;
       }
     });
@@ -338,6 +473,36 @@
       if (tab && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
         activate(tab.dataset.key);
+        return;
+      }
+    });
+
+    // Хоткеи панелей (только на экране терминала): ⌘D/⌘⇧D — разделить,
+    // ⌘[/⌘] и ⌘⌥←/→ — переключение, ⌘W — закрыть активную панель.
+    document.addEventListener('keydown', (e) => {
+      if (!e.metaKey) return;
+      if (state.view !== 'terms') return;
+      const t = activeTab();
+
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        switchPane(t, e.key === 'ArrowRight' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        splitPane(e.shiftKey ? 'column' : 'row');
+        return;
+      }
+      if (e.key === '[' || e.key === ']') {
+        e.preventDefault();
+        switchPane(t, e.key === ']' ? 1 : -1);
+        return;
+      }
+      if (e.key === 'w' || e.key === 'W') {
+        if (!t) return;
+        e.preventDefault();
+        closePane(t, t.activeKey);
         return;
       }
     });
