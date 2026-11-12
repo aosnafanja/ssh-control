@@ -62,7 +62,8 @@ function normalizeData(d) {
     version: 1,
     servers: Array.isArray(d.servers) ? d.servers : [],
     keyMeta: d.keyMeta && typeof d.keyMeta === 'object' ? d.keyMeta : {},
-    settings: Object.assign({ theme: 'system' }, d.settings)
+    settings: Object.assign({ theme: 'system' }, d.settings),
+    snippets: Array.isArray(d.snippets) ? d.snippets : []
   };
 }
 async function persist() {
@@ -299,6 +300,19 @@ document.addEventListener('click', async (e) => {
   if (action === 'change-password') { changePasswordModal(); return; }
   if (action === 'remove-password') { removePasswordModal(); return; }
 
+  // snippets
+  if (action === 'new-snippet') { snippetModal(null); return; }
+  if (action === 'snippet-edit') {
+    const sn = (state.data.snippets || []).find((x) => x.id === actionEl.dataset.id);
+    if (sn) snippetModal(sn);
+    return;
+  }
+  if (action === 'snippet-delete') {
+    const sn = (state.data.snippets || []).find((x) => x.id === actionEl.dataset.id);
+    if (sn) deleteSnippetModal(sn);
+    return;
+  }
+
   if (action === 'theme') {
     state.data.settings.theme = actionEl.dataset.val;
     applyTheme(actionEl.dataset.val);
@@ -306,6 +320,11 @@ document.addEventListener('click', async (e) => {
     renderSettings();
     return;
   }
+});
+
+// Esc закрывает модалку
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('#modal-root').innerHTML) closeModal();
 });
 
 // Поиск (input, без data-action)

@@ -18,7 +18,7 @@ let key = null;     // производный 32-байтовый ключ
 let saltHex = null; // соль текущего ключа
 
 function defaultData() {
-  return { version: 1, servers: [], keyMeta: {}, settings: { theme: 'system' } };
+  return { version: 1, servers: [], keyMeta: {}, settings: { theme: 'system' }, snippets: [] };
 }
 
 function dataFilePath() {
