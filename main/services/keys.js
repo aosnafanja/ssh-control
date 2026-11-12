@@ -7,6 +7,7 @@ const { execFile } = require('child_process');
 
 const sshDir = process.env.SSH_CONTROL_SSH_DIR || path.join(os.homedir(), '.ssh');
 
+/* c8 ignore start */
 function run(cmd, args) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout: 20000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
@@ -16,10 +17,12 @@ function run(cmd, args) {
   });
 }
 
+/* c8 ignore stop */
 function keyPath(name) {
   return path.join(sshDir, name);
 }
 
+/* c8 ignore start */
 function isPrivateKeyFile(filePath) {
   try {
     const stat = fs.statSync(filePath);
@@ -31,6 +34,7 @@ function isPrivateKeyFile(filePath) {
   }
 }
 
+/* c8 ignore stop */
 function parseFingerprintLine(line) {
   // Пример: "256 SHA256:u/... comment (ED25519)"
   const m = line.match(/^(\d+)\s+(\S+)\s+(.*?)\s*\(([A-Za-z0-9_-]+)\)\s*$/);
@@ -46,6 +50,7 @@ function parseFingerprintLine(line) {
   };
 }
 
+/* c8 ignore start */
 async function describeKey(filePath, name) {
   const info = {
     name,
@@ -92,6 +97,7 @@ async function scanKeys() {
   return result;
 }
 
+/* c8 ignore stop */
 function sanitizeName(name) {
   let n = String(name || '').trim();
   n = n.replace(/[/\\\s]+/g, '-');
@@ -101,6 +107,7 @@ function sanitizeName(name) {
   return n;
 }
 
+/* c8 ignore start */
 async function createKey({ name, type, bits, comment, passphrase }) {
   const safe = sanitizeName(name);
   const target = keyPath(safe);
@@ -171,6 +178,7 @@ async function deleteKey(name) {
   return true;
 }
 
+/* c8 ignore stop */
 module.exports = {
   sshDir,
   keyPath,

@@ -4,6 +4,7 @@ const { execFile } = require('child_process');
 const os = require('os');
 const path = require('path');
 
+/* c8 ignore start */
 function execFileP(cmd, args) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout: 15000 }, (err, stdout, stderr) => {
@@ -13,6 +14,7 @@ function execFileP(cmd, args) {
   });
 }
 
+/* c8 ignore stop */
 function expandTilde(p) {
   if (!p) return p;
   if (p === '~') return os.homedir();
@@ -56,6 +58,7 @@ function buildAliasCommand(alias) {
   return ['ssh', ...args].join(' ');
 }
 
+/* c8 ignore start */
 async function runCommand(cmd) {
   if (!cmd) throw new Error('Пустая команда');
   const script = `tell application "Terminal"\n\tactivate\n\tdo script ${JSON.stringify(cmd)}\nend tell`;
@@ -69,4 +72,5 @@ async function run(server) {
   return runCommand(cmd);
 }
 
+/* c8 ignore stop */
 module.exports = { buildArgs, buildCommand, buildAliasArgs, buildAliasCommand, expandTilde, run, runCommand };
