@@ -178,5 +178,6 @@ module.exports = {
   createKey,
   renameKey,
   deleteKey,
-  sanitizeName
+  sanitizeName,
+  parseFingerprintLine
 };

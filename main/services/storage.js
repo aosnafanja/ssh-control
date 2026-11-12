@@ -172,6 +172,7 @@ function exportBackup(destPath) {
 }
 
 module.exports = {
+  defaultData,
   init,
   getState,
   getData,
