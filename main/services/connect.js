@@ -37,12 +37,21 @@ function buildCommand(server) {
   return parts.join(' ');
 }
 
-async function run(server) {
-  const cmd = buildCommand(server);
-  if (!cmd) throw new Error('Не заполнен адрес сервера');
+function buildAliasCommand(alias) {
+  return `ssh ${String(alias || '').trim()}`;
+}
+
+async function runCommand(cmd) {
+  if (!cmd) throw new Error('Пустая команда');
   const script = `tell application "Terminal"\n\tactivate\n\tdo script ${JSON.stringify(cmd)}\nend tell`;
   await execFileP('osascript', ['-e', script]);
   return cmd;
 }
 
-module.exports = { buildCommand, run };
+async function run(server) {
+  const cmd = buildCommand(server);
+  if (!cmd) throw new Error('Не заполнен адрес сервера');
+  return runCommand(cmd);
+}
+
+module.exports = { buildCommand, run, buildAliasCommand, runCommand };

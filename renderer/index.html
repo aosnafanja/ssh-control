@@ -34,6 +34,11 @@
           <span>Ключи</span>
           <span class="count" id="keys-count"></span>
         </button>
+        <button class="nav-item" data-action="nav" data-view="aliases">
+          <svg viewBox="0 0 24 24" class="ico"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/></svg>
+          <span>Псевдонимы</span>
+          <span class="count" id="aliases-count"></span>
+        </button>
         <button class="nav-item" data-action="nav" data-view="servers">
           <svg viewBox="0 0 24 24" class="ico"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
           <span>Серверы</span>
@@ -74,6 +79,31 @@
           </div>
         </header>
         <div class="view-body" id="keys-list"></div>
+      </section>
+
+      <!-- Псевдонимы -->
+      <section id="view-aliases" class="view hidden">
+        <header class="view-header">
+          <div>
+            <h2>Псевдонимы SSH</h2>
+            <p class="muted">Записи <span class="mono">Host</span> из <span class="mono">~/.ssh/config</span> — затем просто <span class="mono">ssh alias</span></p>
+          </div>
+          <div class="header-actions">
+            <div class="search">
+              <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="aliases-search" placeholder="Поиск…">
+            </div>
+            <button class="btn ghost" data-action="open-config">
+              <svg viewBox="0 0 24 24" class="ico"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              Открыть config
+            </button>
+            <button class="btn primary" data-action="new-alias">
+              <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg>
+              Новый псевдоним
+            </button>
+          </div>
+        </header>
+        <div class="view-body" id="aliases-list"></div>
       </section>
 
       <!-- Серверы -->

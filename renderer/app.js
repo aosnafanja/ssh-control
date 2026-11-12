@@ -24,9 +24,11 @@ const ICONS = {
 const state = {
   data: null,
   keys: [],
+  aliases: [],
   view: 'keys',
   searchKeys: '',
   searchServers: '',
+  searchAliases: '',
   groupFilter: 'all',
   encrypted: false
 };
@@ -96,6 +98,7 @@ async function enterApp() {
   state.data = normalizeData(d);
   applyTheme(state.data.settings.theme || 'system');
   await refreshKeys();
+  await refreshAliases();
   render();
 }
 
@@ -107,16 +110,26 @@ async function refreshKeys() {
   }
 }
 
+async function refreshAliases() {
+  try {
+    state.aliases = await bridge.listHosts();
+  } catch {
+    state.aliases = [];
+  }
+}
+
 /* ---------- render ---------- */
 function render() {
   $$('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === state.view));
   $('#keys-count').textContent = state.keys.length;
+  $('#aliases-count').textContent = state.aliases.length;
   $('#servers-count').textContent = (state.data.servers || []).length;
 
   $$('.view').forEach((v) => v.classList.add('hidden'));
   $('#view-' + state.view).classList.remove('hidden');
 
   if (state.view === 'keys') renderKeys();
+  else if (state.view === 'aliases') renderAliases();
   else if (state.view === 'servers') renderServers();
   else if (state.view === 'settings') renderSettings();
 }
@@ -180,6 +193,50 @@ function keyCard(k) {
         <div class="detail-actions">
           ${k.pub ? `<button class="btn ghost" data-action="key-copy-pub" data-name="${esc(k.name)}">${ICONS.copy} Скопировать публичный ключ</button>` : ''}
           ${k.fingerprint ? `<button class="btn ghost" data-action="key-copy-fp" data-name="${esc(k.name)}">${ICONS.copy} Скопировать отпечаток</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderAliases() {
+  const q = state.searchAliases.toLowerCase();
+  const list = state.aliases.filter((a) => {
+    const hay = (a.name + ' ' + a.hostName + ' ' + a.user + ' ' + a.identityFile).toLowerCase();
+    return !q || hay.includes(q);
+  });
+
+  if (!list.length) {
+    $('#aliases-list').innerHTML = emptyState(
+      q ? 'Ничего не найдено' : 'Псевдонимов нет',
+      q ? 'Измените запрос.' : 'Создайте псевдоним — и подключайтесь командой ssh alias.'
+    );
+    return;
+  }
+
+  $('#aliases-list').innerHTML = `<div class="alias-list">${list.map(aliasCard).join('')}</div>`;
+}
+
+function aliasCard(a) {
+  const target = (a.user ? a.user + '@' : '') + (a.hostName || '—') + ((a.port && String(a.port) !== '22') ? ':' + a.port : '');
+  return `
+    <div class="card alias-card" data-alias="${esc(a.name)}">
+      <div class="alias-main">
+        <div class="alias-glyph">${ICONS.terminal}</div>
+        <div class="alias-info">
+          <div class="alias-name-row">
+            <span class="alias-name mono">${esc(a.name)}</span>
+            ${a.hostName ? `<span class="alias-target mono">${esc(target)}</span>` : ''}
+          </div>
+          <div class="alias-sub">
+            ${a.identityFile ? `<span class="badge">🔑 ${esc(keyLabel(a.identityFile))}</span>` : ''}
+            ${a.extraCount ? `<span class="badge">+${a.extraCount} доп. опций</span>` : ''}
+          </div>
+        </div>
+        <div class="alias-actions">
+          <button class="btn ghost" data-action="alias-copy-cmd" data-alias="${esc(a.name)}">${ICONS.copy} <span class="mono">ssh ${esc(a.name)}</span></button>
+          <button class="icon-btn" data-action="alias-edit" data-alias="${esc(a.name)}" title="Редактировать">${ICONS.pencil}</button>
+          <button class="icon-btn danger" data-action="alias-delete" data-alias="${esc(a.name)}" title="Удалить">${ICONS.trash}</button>
+          <button class="btn primary" data-action="alias-connect" data-alias="${esc(a.name)}">${ICONS.terminal} Подключиться</button>
         </div>
       </div>
     </div>`;
@@ -524,6 +581,74 @@ function deleteServerModal(server) {
   });
 }
 
+function aliasModal(alias) {
+  const isEdit = !!alias;
+  const a = alias || { name: '', hostName: '', user: '', port: '', identityFile: '', extra: '' };
+  const keyOptions = state.keys.map((k) =>
+    `<option value="~/.ssh/${esc(k.name)}" ${a.identityFile === '~/.ssh/' + k.name ? 'selected' : ''}>${esc(k.name)}</option>`
+  ).join('');
+
+  const m = openModal(`
+    <h3>${isEdit ? 'Редактировать псевдоним' : 'Новый псевдоним'}</h3>
+    <div class="field"><label>Псевдоним</label><input id="al-name" value="${esc(a.name)}" placeholder="main-server"><p class="hint">Команда подключения: <span class="mono">ssh ${esc(a.name) || 'alias'}</span></p></div>
+    <div class="field"><label>Адрес (HostName)</label><input id="al-host" value="${esc(a.hostName)}" placeholder="1.2.3.4 или example.com"></div>
+    <div class="field-row">
+      <div class="field"><label>Пользователь</label><input id="al-user" value="${esc(a.user)}" placeholder="root"></div>
+      <div class="field"><label>Порт</label><input id="al-port" type="number" value="${esc(a.port)}" placeholder="22"></div>
+    </div>
+    <div class="field"><label>SSH-ключ (IdentityFile)</label>
+      <select id="al-key">
+        <option value="">— не выбран —</option>
+        ${keyOptions}
+      </select>
+    </div>
+    <div class="field"><label>Доп. опции (по строке)</label><textarea id="al-extra" placeholder="ProxyJump jump-host\nLocalForward 8080 127.0.0.1:8080">${esc(a.extra || '')}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn" data-action="modal-close">Отмена</button>
+      <button class="btn primary" id="al-submit">${isEdit ? 'Сохранить' : 'Добавить'}</button>
+    </div>
+  `);
+
+  $('#al-submit').addEventListener('click', async () => {
+    const name = $('#al-name').value.trim();
+    if (!name) return toast('Введите псевдоним', 'error');
+    try {
+      await bridge.saveHost({
+        name,
+        hostName: $('#al-host').value.trim(),
+        user: $('#al-user').value.trim(),
+        port: $('#al-port').value.trim(),
+        identityFile: $('#al-key').value,
+        extra: $('#al-extra').value
+      });
+      closeModal();
+      toast(isEdit ? 'Псевдоним сохранён' : 'Псевдоним добавлен');
+      await refreshAliases();
+      render();
+    } catch (err) { toast(err.message || 'Ошибка', 'error'); }
+  });
+}
+
+function deleteAliasModal(alias) {
+  const m = openModal(`
+    <h3>Удалить псевдоним?</h3>
+    <p class="muted">Запись <b>${esc(alias.name)}</b> будет удалена из <span class="mono">~/.ssh/config</span>.</p>
+    <div class="modal-actions">
+      <button class="btn" data-action="modal-close">Отмена</button>
+      <button class="btn danger" id="al-del-submit">Удалить</button>
+    </div>
+  `);
+  $('#al-del-submit').addEventListener('click', async () => {
+    try {
+      await bridge.deleteHost(alias.name);
+      closeModal();
+      toast('Псевдоним удалён');
+      await refreshAliases();
+      render();
+    } catch (err) { toast(err.message || 'Ошибка', 'error'); }
+  });
+}
+
 function masterPasswordModal() {
   const m = openModal(`
     <h3>Установить пароль</h3>
@@ -638,6 +763,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
   if (action === 'new-key') { createKeyModal(); return; }
+  if (action === 'new-alias') { aliasModal(null); return; }
   if (action === 'new-server') { serverModal(null); return; }
 
   if (action === 'key-copy-pub' || action === 'key-copy-fp') {
@@ -657,6 +783,30 @@ document.addEventListener('click', async (e) => {
   if (action === 'key-delete') {
     const key = state.keys.find((k) => k.name === actionEl.dataset.name);
     if (key) deleteKeyModal(key);
+    return;
+  }
+
+  if (action === 'open-config') { bridge.openConfig(); return; }
+  if (action === 'alias-connect') {
+    const alias = actionEl.dataset.alias;
+    try { await bridge.connectAlias(alias); toast('Terminal запущен'); }
+    catch (err) { toast(err.message || 'Не удалось запустить Terminal', 'error'); }
+    return;
+  }
+  if (action === 'alias-copy-cmd') {
+    const alias = actionEl.dataset.alias;
+    const cmd = await bridge.aliasCommand(alias);
+    await copyText(cmd);
+    return;
+  }
+  if (action === 'alias-edit') {
+    const name = actionEl.dataset.alias;
+    const full = await bridge.getHost(name);
+    aliasModal(full || { name });
+    return;
+  }
+  if (action === 'alias-delete') {
+    deleteAliasModal({ name: actionEl.dataset.alias });
     return;
   }
 
@@ -706,6 +856,7 @@ document.addEventListener('click', async (e) => {
 // Поиск (input, без data-action)
 document.addEventListener('input', (e) => {
   if (e.target.id === 'keys-search') { state.searchKeys = e.target.value; renderKeys(); }
+  if (e.target.id === 'aliases-search') { state.searchAliases = e.target.value; renderAliases(); }
   if (e.target.id === 'servers-search') { state.searchServers = e.target.value; renderServers(); }
 });
 
@@ -733,6 +884,7 @@ async function unlockHandler() {
     state.data = normalizeData(data);
     applyTheme(state.data.settings.theme || 'system');
     await refreshKeys();
+    await refreshAliases();
     render();
     $('#unlock').classList.add('hidden');
     $('#app').classList.remove('hidden');

@@ -7,6 +7,7 @@ const os = require('os');
 const keys = require('./services/keys');
 const storage = require('./services/storage');
 const connect = require('./services/connect');
+const sshConfig = require('./services/sshConfig');
 
 let mainWindow = null;
 
@@ -55,6 +56,20 @@ function registerIpc() {
   ipcMain.handle('keys:delete', (_e, name) => keys.deleteKey(name));
   ipcMain.handle('keys:reveal', (_e, name) => shell.showItemInFolder(keys.keyPath(name)));
   ipcMain.handle('keys:openSshFolder', () => shell.openPath(keys.sshDir));
+
+  // ---- SSH config / aliases ----
+  ipcMain.handle('sshconfig:list', () => sshConfig.listHosts());
+  ipcMain.handle('sshconfig:get', (_e, name) => sshConfig.getHost(name));
+  ipcMain.handle('sshconfig:save', (_e, record) => sshConfig.saveHost(record));
+  ipcMain.handle('sshconfig:delete', (_e, name) => sshConfig.deleteHost(name));
+  ipcMain.handle('sshconfig:reveal', () => shell.showItemInFolder(sshConfig.configPath()));
+  ipcMain.handle('sshconfig:open', () => shell.openPath(sshConfig.configPath()));
+  ipcMain.handle('sshconfig:command', (_e, alias) => connect.buildAliasCommand(alias));
+  ipcMain.handle('sshconfig:connect', async (_e, alias) => {
+    const cmd = connect.buildAliasCommand(alias);
+    await connect.runCommand(cmd);
+    return cmd;
+  });
 
   // ---- Storage / data ----
   ipcMain.handle('data:getState', () => storage.getState());
