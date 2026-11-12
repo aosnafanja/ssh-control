@@ -303,8 +303,9 @@
   function splitPane(direction) {
     const tab = activeTab();
     if (!tab) return;
-    // Первое разделение задаёт направление; последующие добавляют в том же.
-    if (!tab.direction) tab.direction = direction;
+    // Каждая кнопка задаёт направление раскладки всех панелей вкладки:
+    // «вертикально» = row (бок о бок), «горизонтально» = column (стопкой).
+    tab.direction = direction;
     createPane(tab, tab.payload);
   }
 
