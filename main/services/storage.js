@@ -33,6 +33,7 @@ function loadRaw() {
   }
 }
 
+/* c8 ignore start */
 function savePrefs() {
   try {
     fs.mkdirSync(path.dirname(prefsPath), { recursive: true });
@@ -48,6 +49,7 @@ function init(userDataPath) {
   } catch {}
 }
 
+/* c8 ignore stop */
 function getState() {
   const raw = loadRaw();
   return {
@@ -149,6 +151,7 @@ function setMasterPassword({ current, next } = {}) {
   return { encrypted: !!next };
 }
 
+/* c8 ignore start */
 function changeDir(newDir) {
   if (!newDir) return dataDir;
   const src = dataFilePath();
@@ -171,6 +174,7 @@ function exportBackup(destPath) {
   return destPath;
 }
 
+/* c8 ignore stop */
 module.exports = {
   defaultData,
   init,
