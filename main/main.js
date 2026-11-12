@@ -8,6 +8,7 @@ const keys = require('./services/keys');
 const storage = require('./services/storage');
 const connect = require('./services/connect');
 const sshConfig = require('./services/sshConfig');
+const terminal = require('./services/terminal');
 
 let mainWindow = null;
 
@@ -31,7 +32,10 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
-  mainWindow.on('closed', () => { mainWindow = null; });
+  mainWindow.on('closed', () => {
+    terminal.killAll();
+    mainWindow = null;
+  });
 }
 
 app.whenReady().then(() => {
@@ -43,6 +47,8 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on('before-quit', () => terminal.killAll());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
@@ -101,6 +107,15 @@ function registerIpc() {
   // ---- Connect ----
   ipcMain.handle('connect:command', (_e, server) => connect.buildCommand(server));
   ipcMain.handle('connect:run', (_e, server) => connect.run(server));
+
+  // ---- Terminal ----
+  terminal.setEventSink((channel, ...args) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args);
+  });
+  ipcMain.handle('term:create', (_e, payload) => terminal.createSession(payload));
+  ipcMain.handle('term:write', (_e, id, data) => terminal.write(id, data));
+  ipcMain.handle('term:resize', (_e, id, cols, rows) => terminal.resize(id, cols, rows));
+  ipcMain.handle('term:kill', (_e, id) => terminal.kill(id));
 
   // ---- Misc ----
   ipcMain.handle('app:home', () => os.homedir());

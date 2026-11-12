@@ -1,0 +1,372 @@
+'use strict';
+
+(function () {
+  const Terminal = window.Terminal;
+  // Аддоны @xterm/addon-* собраны как UMD, который кладёт на window не сам класс,
+  // а namespace { FitAddon: class } — достаём класс из него, с fallback на прямое
+  // значение (если в другой версии класс лежит сразу на window).
+  const FitAddon = (window.FitAddon && window.FitAddon.FitAddon) || window.FitAddon;
+  const SearchAddon = (window.SearchAddon && window.SearchAddon.SearchAddon) || window.SearchAddon;
+
+  if (!Terminal || !FitAddon || !SearchAddon) {
+    console.error('TERMINAL: xterm.js vendor files not loaded');
+    return;
+  }
+
+  // Цветовые схемы терминала. Согласованы с токенами приложения; применяются
+  // к canvas-рендеру xterm.js, поэтому заданы как данные, а не CSS-токены.
+  const THEMES = {
+    light: {
+      background: '#ffffff', foreground: '#1d1d1f', cursor: '#0a84ff', cursorAccent: '#ffffff',
+      selectionBackground: 'rgba(10, 132, 255, 0.3)',
+      black: '#1d1d1f', red: '#ff3b30', green: '#248a3d', yellow: '#b25000',
+      blue: '#0a84ff', magenta: '#bf5af2', cyan: '#0071a4', white: '#aeaeb2',
+      brightBlack: '#6e6e73', brightRed: '#ff6961', brightGreen: '#30d158', brightYellow: '#ffd60a',
+      brightBlue: '#64d2ff', brightMagenta: '#da8fff', brightCyan: '#66d4cf', brightWhite: '#ffffff'
+    },
+    dark: {
+      background: '#161618', foreground: '#f5f5f7', cursor: '#0a84ff', cursorAccent: '#161618',
+      selectionBackground: 'rgba(10, 132, 255, 0.35)',
+      black: '#161618', red: '#ff453a', green: '#30d158', yellow: '#ffd60a',
+      blue: '#0a84ff', magenta: '#bf5af2', cyan: '#5e5ce6', white: '#aeaeb2',
+      brightBlack: '#636366', brightRed: '#ff6961', brightGreen: '#30d158', brightYellow: '#ffd60a',
+      brightBlue: '#64d2ff', brightMagenta: '#da8fff', brightCyan: '#66d4cf', brightWhite: '#ffffff'
+    }
+  };
+
+  const SEARCH_DECORATIONS = {
+    matchBackground: '#264f78',
+    matchBorder: '#0a84ff',
+    matchOverviewRuler: '#0a84ff',
+    activeMatchBackground: '#0a84ff',
+    activeMatchBorder: '#64d2ff',
+    activeMatchColorOverviewRuler: '#64d2ff'
+  };
+
+  const STATUS_LABELS = { connecting: 'подключение', active: 'подключено', exited: 'завершено', error: 'ошибка' };
+
+  const tabs = new Map(); // key -> tab
+  let activeKey = null;
+  let seq = 0;
+  let searchVisible = false;
+
+  /* ---------- theme ---------- */
+  function termThemePreference() {
+    const s = (state.data && state.data.settings) || {};
+    return s.terminalTheme || s.theme || 'system';
+  }
+  function resolvedTheme() {
+    const t = termThemePreference();
+    if (t === 'light' || t === 'dark') return t;
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  function currentPalette() { return THEMES[resolvedTheme()]; }
+  function applyThemeTo(tab) { if (tab.term) tab.term.options.theme = currentPalette(); }
+  function applyThemeAll() { tabs.forEach(applyThemeTo); renderThemeSeg(); }
+  function renderThemeSeg() {
+    const pref = termThemePreference();
+    $$('#term-theme-seg button').forEach((b) => b.classList.toggle('active', b.dataset.val === pref));
+  }
+
+  /* ---------- render ---------- */
+  function tabEl(t) {
+    const status = t.status || 'connecting';
+    const label = STATUS_LABELS[status] || STATUS_LABELS.connecting;
+    let stateWord = '';
+    if (status !== 'active') {
+      stateWord = (status === 'exited' && t.exitCode != null)
+        ? `<span class="term-tab-state">${esc(label)} · код ${esc(t.exitCode)}</span>`
+        : `<span class="term-tab-state">${esc(label)}</span>`;
+    }
+    return `
+      <div class="term-tab ${t.key === activeKey ? 'active' : ''}" data-action="term-select" data-key="${esc(t.key)}" role="tab" aria-selected="${t.key === activeKey ? 'true' : 'false'}" aria-label="${esc(t.title)} — ${esc(label)}" tabindex="0">
+        <span class="term-status ${esc(status)}" aria-hidden="true"></span>
+        <span class="term-tab-title">${esc(t.title)}</span>
+        ${stateWord}
+        <button class="term-tab-close" data-action="term-close" data-key="${esc(t.key)}" title="Закрыть вкладку" aria-label="Закрыть вкладку">×</button>
+      </div>`;
+  }
+
+  function renderTabs() {
+    const bar = $('#term-tabs');
+    if (bar) bar.innerHTML = Array.from(tabs.values()).map(tabEl).join('');
+  }
+
+  function renderStage() {
+    const stage = $('#term-stage');
+    if (!stage) return;
+    let empty = stage.querySelector('.term-empty');
+    tabs.forEach((t) => t.host.classList.toggle('hidden', t.key !== activeKey));
+    if (tabs.size === 0) {
+      if (!empty) {
+        empty = document.createElement('div');
+        empty.className = 'term-empty';
+        empty.innerHTML = '<svg viewBox="0 0 24 24" class="ico"><path d="m4 17 6-5-6-5M12 19h8"/></svg><h3>Нет открытых сессий</h3><p>Подключитесь к серверу или псевдониму</p>';
+        stage.appendChild(empty);
+      }
+      empty.classList.remove('hidden');
+    } else if (empty) {
+      empty.classList.add('hidden');
+    }
+  }
+
+  function render() { renderTabs(); renderStage(); }
+
+  function fitTab(t) {
+    if (!t || !t.host || !t.fitAddon) return;
+    const w = t.host.offsetWidth;
+    const h = t.host.offsetHeight;
+    if (!w || !h) return;
+    try { t.fitAddon.fit(); } catch (e) { /* ignore */ }
+    if (t.sessionId && t.term.cols && t.term.rows) {
+      bridge.resizeTerminal(t.sessionId, t.term.cols, t.term.rows);
+    }
+  }
+
+  function activate(key) {
+    activeKey = key;
+    render();
+    const t = tabs.get(key);
+    if (t) setTimeout(() => fitTab(t), 0);
+  }
+
+  /* ---------- open / close ---------- */
+  function serverPayload(server) {
+    // В IPC уходит только то, что нужно для сборки argv ssh; пароль сервера
+    // и парольная фраза ключа сюда не попадают (вводятся пользователем в PTY).
+    return {
+      type: 'server',
+      server: {
+        host: server.host,
+        port: server.port,
+        user: server.user,
+        authMethod: server.authMethod,
+        keyPath: server.keyPath,
+        extraArgs: server.extraArgs
+      }
+    };
+  }
+
+  function openServer(server) {
+    if (!server || !server.host) { toast('Не заполнен адрес сервера', 'error'); return; }
+    const title = server.name || server.host;
+    state.view = 'terms';
+    window.render();
+    openTab(serverPayload(server), title);
+  }
+
+  function openAlias(alias) {
+    const name = String(alias || '').trim();
+    if (!name) { toast('Не указан псевдоним', 'error'); return; }
+    state.view = 'terms';
+    window.render();
+    openTab({ type: 'alias', alias: name }, name);
+  }
+
+  function openTab(payload, title) {
+    const stage = $('#term-stage');
+    if (!stage) return;
+    // id сессии генерируется в рендере и уходит в main: события data/exit,
+    // пришедшие раньше резолва term:create (напр. мгновенный отказ ssh),
+    // сразу находят свою вкладку, а не теряются.
+    const key = 't' + (seq++) + '_' + Date.now().toString(36);
+
+    const host = document.createElement('div');
+    host.className = 'term-host';
+    stage.appendChild(host);
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+      fontSize: 13,
+      scrollback: 5000,
+      theme: currentPalette()
+    });
+    const fitAddon = new FitAddon();
+    const searchAddon = new SearchAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(searchAddon);
+    term.open(host);
+
+    const tab = { key, payload, title, term, fitAddon, searchAddon, host, status: 'connecting', sessionId: key, exitCode: null, observer: null };
+    tabs.set(key, tab);
+
+    // Ввод с клавиатуры и вставка (Cmd+V) уходят в PTY — иначе терминал read-only.
+    term.onData((data) => { if (tab.sessionId) bridge.writeTerminal(tab.sessionId, data); });
+
+    const observer = new ResizeObserver(() => fitTab(tab));
+    observer.observe(host);
+    tab.observer = observer;
+
+    activate(key);
+    setTimeout(() => term.focus(), 40);
+
+    bridge.createTerminal(Object.assign({}, payload, { id: key, cols: 80, rows: 24 }))
+      .then(() => {
+        if (tabs.has(key)) fitTab(tab);
+      })
+      .catch((err) => {
+        if (!tabs.has(key)) return;
+        tab.status = 'error';
+        renderTabs();
+        term.write('\r\n[Ошибка подключения]\r\n');
+        toast(err && err.message ? err.message : 'Не удалось запустить сессию', 'error');
+      });
+  }
+
+  function closeTab(key) {
+    const t = tabs.get(key);
+    if (!t) return;
+    tabs.delete(key);
+    if (t.sessionId) bridge.killTerminal(t.sessionId);
+    if (t.observer) t.observer.disconnect();
+    try { t.term.dispose(); } catch (e) { /* ignore */ }
+    if (t.host && t.host.parentNode) t.host.parentNode.removeChild(t.host);
+    if (activeKey === key) activeKey = Array.from(tabs.keys()).pop() || null;
+    render();
+    if (activeKey) {
+      const next = tabs.get(activeKey);
+      if (next) setTimeout(() => fitTab(next), 0);
+    }
+  }
+
+  function findBySessionId(id) {
+    for (const t of tabs.values()) if (t.sessionId === id) return t;
+    return null;
+  }
+
+  /* ---------- pty events ---------- */
+  function onData(id, data) {
+    const t = findBySessionId(id);
+    if (!t) return;
+    t.term.write(data);
+    if (t.status === 'connecting') { t.status = 'active'; renderTabs(); }
+  }
+  function onExit(id, code) {
+    const t = findBySessionId(id);
+    if (!t) return;
+    t.status = 'exited';
+    t.exitCode = code;
+    renderTabs();
+  }
+
+  /* ---------- search ---------- */
+  function activeTab() { return activeKey ? tabs.get(activeKey) : null; }
+
+  function searchOptions() {
+    const regexEl = $('#term-regex');
+    return {
+      regex: !!(regexEl && regexEl.checked),
+      caseSensitive: false,
+      incremental: false,
+      decorations: SEARCH_DECORATIONS
+    };
+  }
+
+  function doSearch(incremental) {
+    const t = activeTab();
+    const input = $('#term-search-input');
+    if (!t || !input) return;
+    const q = input.value;
+    if (!q) { t.searchAddon.clearDecorations(); return; }
+    const opts = Object.assign({}, searchOptions(), { incremental: !!incremental });
+    t.searchAddon.findNext(q, opts);
+  }
+
+  function toggleSearch() {
+    searchVisible = !searchVisible;
+    const bar = $('#term-searchbar');
+    if (bar) bar.classList.toggle('hidden', !searchVisible);
+    const input = $('#term-search-input');
+    if (searchVisible && input) { input.focus(); input.select(); }
+    if (!searchVisible) clearSearch();
+  }
+
+  function clearSearch() {
+    const t = activeTab();
+    if (t) t.searchAddon.clearDecorations();
+    const input = $('#term-search-input');
+    if (input) input.value = '';
+  }
+
+  /* ---------- init ---------- */
+  function init() {
+    bridge.onTermData(onData);
+    bridge.onTermExit(onExit);
+
+    renderThemeSeg();
+    render();
+
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      const action = el.dataset.action;
+
+      if (action === 'term-select') { activate(el.dataset.key); return; }
+      if (action === 'term-close') { closeTab(el.dataset.key); return; }
+      if (action === 'term-search-toggle') { toggleSearch(); return; }
+      if (action === 'term-search-next') { doSearch(false); return; }
+      if (action === 'term-search-prev') {
+        const t = activeTab();
+        const input = $('#term-search-input');
+        if (t && input && input.value) t.searchAddon.findPrevious(input.value, searchOptions());
+        return;
+      }
+      if (action === 'nav' && el.dataset.view === 'terms') {
+        renderThemeSeg();
+        const t = activeTab();
+        if (t) setTimeout(() => fitTab(t), 0);
+        return;
+      }
+    });
+
+    // Тема терминала — отдельный переключатель (не трогает тему приложения)
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('#term-theme-seg button');
+      if (!b) return;
+      const val = b.dataset.val;
+      if (!state.data) state.data = { settings: {} };
+      if (!state.data.settings) state.data.settings = {};
+      state.data.settings.terminalTheme = val;
+      applyThemeAll();
+      persist();
+    });
+
+    // Клавиатура на вкладках (Enter/Space)
+    document.addEventListener('keydown', (e) => {
+      const tab = e.target.closest('.term-tab[data-action="term-select"]');
+      if (tab && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        activate(tab.dataset.key);
+        return;
+      }
+    });
+
+    document.addEventListener('input', (e) => {
+      if (e.target.id === 'term-search-input') doSearch(true);
+    });
+    document.addEventListener('change', (e) => {
+      if (e.target.id === 'term-regex') doSearch(true);
+    });
+
+    // Enter — далее, Esc — закрыть поиск
+    document.addEventListener('keydown', (e) => {
+      if (!searchVisible) return;
+      if (e.key === 'Escape') { toggleSearch(); return; }
+      if (e.key === 'Enter' && e.target && e.target.id === 'term-search-input') {
+        doSearch(false);
+        return;
+      }
+    });
+
+    // Реакция на смену системной темы, когда терминал в режиме «Система»
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (termThemePreference() === 'system') applyThemeAll();
+      });
+    }
+  }
+
+  window.Term = { openServer, openAlias, closeTab };
+  init();
+})();
