@@ -18,8 +18,6 @@ function renderSettings() {
     pwDesc.textContent = 'Серверы и секреты хранятся в открытом виде.';
     pwActions.innerHTML = `<button class="btn ghost" data-action="set-password">Установить пароль</button>`;
   }
-
-  renderSnippets();
 }
 
 function masterPasswordModal() {
@@ -86,89 +84,5 @@ function removePasswordModal() {
       state.encrypted = false;
       closeModal(); toast('Пароль убран'); renderSettings();
     } catch (err) { toast(err.message, 'error'); }
-  });
-}
-
-/* ---------- snippets ---------- */
-function newSnippetId() {
-  return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
-
-function snippetRow(s) {
-  return `
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-title">${esc(s.name)}</div>
-        <div class="mono snippet-command" title="${esc(s.command)}">${esc(s.command)}</div>
-      </div>
-      <div class="setting-actions">
-        <button class="icon-btn" data-action="snippet-edit" data-id="${esc(s.id)}" title="Изменить" aria-label="Изменить">${ICONS.pencil}</button>
-        <button class="icon-btn danger" data-action="snippet-delete" data-id="${esc(s.id)}" title="Удалить" aria-label="Удалить">${ICONS.trash}</button>
-      </div>
-    </div>`;
-}
-
-function renderSnippets() {
-  const box = $('#snippets-list');
-  if (!box) return;
-  const snippets = state.data.snippets || [];
-  if (!snippets.length) {
-    box.innerHTML = '<div class="snippet-empty muted">Нет сниппетов — добавьте первую команду.</div>';
-    return;
-  }
-  box.innerHTML = snippets.map(snippetRow).join('');
-}
-
-function snippetModal(snippet) {
-  const isEdit = !!snippet;
-  const s = snippet || { id: '', name: '', command: '' };
-  const m = openModal(`
-    <h3>${isEdit ? 'Изменить сниппет' : 'Новый сниппет'}</h3>
-    <div class="field"><label>Имя</label><input id="sn-name" value="${esc(s.name)}" placeholder="например, перезапуск nginx"></div>
-    <div class="field"><label>Команда</label><textarea id="sn-command" placeholder="sudo systemctl restart nginx">${esc(s.command)}</textarea></div>
-    <div class="modal-actions">
-      <button class="btn" data-action="modal-close">Отмена</button>
-      <button class="btn primary" id="sn-submit">${isEdit ? 'Сохранить' : 'Добавить'}</button>
-    </div>
-  `);
-  $('#sn-submit').addEventListener('click', async () => {
-    const name = $('#sn-name').value.trim();
-    const command = $('#sn-command').value.trim();
-    if (!name) return toast('Введите имя сниппета', 'error');
-    if (!command) return toast('Введите команду', 'error');
-    if (isEdit) {
-      const idx = state.data.snippets.findIndex((x) => x.id === s.id);
-      if (idx >= 0) state.data.snippets[idx] = { id: s.id, name, command };
-    } else {
-      state.data.snippets.push({ id: newSnippetId(), name, command });
-    }
-    try {
-      await persist();
-      closeModal();
-      toast(isEdit ? 'Сниппет сохранён' : 'Сниппет добавлен');
-      renderSnippets();
-      if (window.Term && window.Term.renderSnippets) window.Term.renderSnippets();
-    } catch (err) { toast(err.message || 'Ошибка', 'error'); }
-  });
-}
-
-function deleteSnippetModal(snippet) {
-  const m = openModal(`
-    <h3>Удалить сниппет?</h3>
-    <p class="muted">Сниппет <b>${esc(snippet.name)}</b> будет удалён из хранилища.</p>
-    <div class="modal-actions">
-      <button class="btn" data-action="modal-close">Отмена</button>
-      <button class="btn danger" id="dsn-submit">Удалить</button>
-    </div>
-  `);
-  $('#dsn-submit').addEventListener('click', async () => {
-    state.data.snippets = state.data.snippets.filter((x) => x.id !== snippet.id);
-    try {
-      await persist();
-      closeModal();
-      toast('Сниппет удалён');
-      renderSnippets();
-      if (window.Term && window.Term.renderSnippets) window.Term.renderSnippets();
-    } catch (err) { toast(err.message || 'Ошибка', 'error'); }
   });
 }

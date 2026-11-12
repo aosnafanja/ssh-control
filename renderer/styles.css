@@ -314,6 +314,25 @@ body {
 .server-foot .spacer { flex: 1; }
 .connect-btn { -webkit-app-region: no-drag; }
 
+/* ---------- Snippets ---------- */
+.snippet-list { display: flex; flex-direction: column; gap: 8px; }
+.snippet-card { padding: 0; overflow: hidden; }
+.snippet-main { display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
+.snippet-glyph {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.snippet-info { flex: 1; min-width: 0; }
+.snippet-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.snippet-name { font-weight: 650; font-size: 15px; }
+.snippet-command {
+  font-family: var(--mono); font-size: 12px; color: var(--text-2);
+  margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  user-select: text;
+}
+.snippet-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
 /* ---------- Settings ---------- */
 .settings-body { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
 .settings-card {
@@ -332,11 +351,6 @@ body {
 .setting-info .muted { font-size: 12px; margin-top: 2px; }
 .setting-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .path { font-size: 12px; color: var(--text-2); word-break: break-all; margin-top: 2px; }
-.snippet-command {
-  display: block; font-size: 12px; color: var(--text-2); margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.snippet-empty { padding: 6px 0; }
 
 /* ---------- Segmented ---------- */
 .segmented {

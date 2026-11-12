@@ -30,6 +30,7 @@ const state = {
   searchKeys: '',
   searchServers: '',
   searchAliases: '',
+  searchSnippets: '',
   groupFilter: 'all',
   encrypted: false
 };
@@ -136,6 +137,7 @@ function render() {
   $('#keys-count').textContent = state.keys.length;
   $('#aliases-count').textContent = state.aliases.length;
   $('#servers-count').textContent = (state.data.servers || []).length;
+  $('#snippets-count').textContent = (state.data.snippets || []).length;
 
   $$('.view').forEach((v) => v.classList.add('hidden'));
   $('#view-' + state.view).classList.remove('hidden');
@@ -143,6 +145,7 @@ function render() {
   if (state.view === 'keys') renderKeys();
   else if (state.view === 'aliases') renderAliases();
   else if (state.view === 'servers') renderServers();
+  else if (state.view === 'snippets') renderSnippets();
   else if (state.view === 'settings') renderSettings();
 }
 
@@ -332,6 +335,7 @@ document.addEventListener('input', (e) => {
   if (e.target.id === 'keys-search') { state.searchKeys = e.target.value; renderKeys(); }
   if (e.target.id === 'aliases-search') { state.searchAliases = e.target.value; renderAliases(); }
   if (e.target.id === 'servers-search') { state.searchServers = e.target.value; renderServers(); }
+  if (e.target.id === 'snippets-search') { state.searchSnippets = e.target.value; renderSnippets(); }
 });
 
 // Тема через segmented в настройках

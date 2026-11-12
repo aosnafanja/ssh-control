@@ -45,6 +45,11 @@
           <span>Серверы</span>
           <span class="count" id="servers-count"></span>
         </button>
+        <button class="nav-item" data-action="nav" data-view="snippets">
+          <svg viewBox="0 0 24 24" class="ico"><path d="m8 6-6 6 6 6"/><path d="m16 6 6 6-6 6"/></svg>
+          <span>Сниппеты</span>
+          <span class="count" id="snippets-count"></span>
+        </button>
         <button class="nav-item" data-action="nav" data-view="terms">
           <svg viewBox="0 0 24 24" class="ico"><path d="m4 17 6-5-6-5M12 19h8"/></svg>
           <span>Терминал</span>
@@ -131,6 +136,27 @@
         </header>
         <div class="group-chips" id="group-chips"></div>
         <div class="view-body" id="servers-list"></div>
+      </section>
+
+      <!-- Сниппеты -->
+      <section id="view-snippets" class="view hidden">
+        <header class="view-header">
+          <div>
+            <h2>Сниппеты</h2>
+            <p class="muted">Сохранённые команды — вставляются в терминал одним кликом</p>
+          </div>
+          <div class="header-actions">
+            <div class="search">
+              <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="snippets-search" placeholder="Поиск…">
+            </div>
+            <button class="btn primary" data-action="new-snippet">
+              <svg viewBox="0 0 24 24" class="ico"><path d="M12 5v14M5 12h14"/></svg>
+              Добавить сниппет
+            </button>
+          </div>
+        </header>
+        <div class="view-body" id="snippets-list"></div>
       </section>
 
       <!-- Терминал -->
@@ -256,18 +282,6 @@
               </div>
             </div>
           </div>
-
-          <div class="settings-card">
-            <h3>Сниппеты</h3>
-            <p class="muted">Сохранённые команды — вставляются в терминал одним кликом.</p>
-            <div id="snippets-list"></div>
-            <div class="setting-row">
-              <div class="setting-info"></div>
-              <div class="setting-actions">
-                <button class="btn primary" data-action="new-snippet">Добавить сниппет</button>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
     </main>
@@ -284,6 +298,7 @@
   <script src="aliases.js"></script>
   <script src="servers.js"></script>
   <script src="settings.js"></script>
+  <script src="snippets.js"></script>
   <script src="terminal.js"></script>
 </body>
 </html>
