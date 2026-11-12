@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
+    "check:lines": "node scripts/check-line-limit.js",
     "package": "electron-builder --mac --dir",
     "dist": "electron-builder --mac"
   },
