@@ -29,7 +29,8 @@ test('storage.defaultData: базовая схема version 1', () => {
     version: 1,
     servers: [],
     keyMeta: {},
-    settings: { theme: 'system' }
+    settings: { theme: 'system' },
+    snippets: []
   });
 });
 

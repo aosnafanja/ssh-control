@@ -54,6 +54,7 @@
   let activeKey = null;
   let seq = 0;
   let searchVisible = false;
+  let snippetsVisible = false;
 
   /* ---------- theme ---------- */
   function termThemePreference() {
@@ -410,6 +411,40 @@
     if (input) input.value = '';
   }
 
+  /* ---------- snippets ---------- */
+  function renderTermSnippets() {
+    const box = $('#term-snippets-list');
+    if (!box) return;
+    const snippets = (state.data && state.data.snippets) || [];
+    if (!snippets.length) {
+      box.innerHTML = '<div class="term-snippets-empty">Нет сниппетов — добавьте в Настройках</div>';
+      return;
+    }
+    box.innerHTML = snippets.map((s) => `
+      <button class="term-snippet" data-action="term-snippet-insert" data-id="${esc(s.id)}" title="${esc(s.command)}" aria-label="Вставить команду: ${esc(s.name)}">
+        <span class="term-snippet-name">${esc(s.name)}</span>
+        <span class="term-snippet-cmd mono">${esc(s.command)}</span>
+      </button>`).join('');
+  }
+
+  function toggleSnippets() {
+    snippetsVisible = !snippetsVisible;
+    const panel = $('#term-snippets');
+    if (panel) panel.classList.toggle('hidden', !snippetsVisible);
+    const btn = $('#term-snippets-toggle');
+    if (btn) btn.setAttribute('aria-pressed', String(snippetsVisible));
+    if (snippetsVisible) renderTermSnippets();
+  }
+
+  function insertSnippet(id) {
+    const snippets = (state.data && state.data.snippets) || [];
+    const sn = snippets.find((x) => x.id === id);
+    if (!sn) return;
+    const pane = activePane();
+    if (!pane || !pane.sessionId) { toast('Нет активной сессии', 'error'); return; }
+    bridge.writeTerminal(pane.sessionId, sn.command);
+  }
+
   /* ---------- init ---------- */
   function init() {
     bridge.onTermData(onData);
@@ -441,6 +476,8 @@
         return;
       }
       if (action === 'term-search-toggle') { toggleSearch(); return; }
+      if (action === 'term-snippets-toggle') { toggleSnippets(); return; }
+      if (action === 'term-snippet-insert') { insertSnippet(el.dataset.id); return; }
       if (action === 'term-search-next') { doSearch(false); return; }
       if (action === 'term-search-prev') {
         const p = activePane();
@@ -525,6 +562,11 @@
       }
     });
 
+    // Esc — закрыть панель сниппетов
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && snippetsVisible) toggleSnippets();
+    });
+
     // Реакция на смену системной темы, когда терминал в режиме «Система»
     if (window.matchMedia) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -533,6 +575,6 @@
     }
   }
 
-  window.Term = { openServer, openAlias, closeTab };
+  window.Term = { openServer, openAlias, closeTab, renderSnippets: renderTermSnippets };
   init();
 })();

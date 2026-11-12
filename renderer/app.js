@@ -30,6 +30,7 @@ const state = {
   searchKeys: '',
   searchServers: '',
   searchAliases: '',
+  searchSnippets: '',
   groupFilter: 'all',
   encrypted: false
 };
@@ -62,7 +63,8 @@ function normalizeData(d) {
     version: 1,
     servers: Array.isArray(d.servers) ? d.servers : [],
     keyMeta: d.keyMeta && typeof d.keyMeta === 'object' ? d.keyMeta : {},
-    settings: Object.assign({ theme: 'system' }, d.settings)
+    settings: Object.assign({ theme: 'system' }, d.settings),
+    snippets: Array.isArray(d.snippets) ? d.snippets : []
   };
 }
 async function persist() {
@@ -135,6 +137,7 @@ function render() {
   $('#keys-count').textContent = state.keys.length;
   $('#aliases-count').textContent = state.aliases.length;
   $('#servers-count').textContent = (state.data.servers || []).length;
+  $('#snippets-count').textContent = (state.data.snippets || []).length;
 
   $$('.view').forEach((v) => v.classList.add('hidden'));
   $('#view-' + state.view).classList.remove('hidden');
@@ -142,6 +145,7 @@ function render() {
   if (state.view === 'keys') renderKeys();
   else if (state.view === 'aliases') renderAliases();
   else if (state.view === 'servers') renderServers();
+  else if (state.view === 'snippets') renderSnippets();
   else if (state.view === 'settings') renderSettings();
 }
 
@@ -299,6 +303,19 @@ document.addEventListener('click', async (e) => {
   if (action === 'change-password') { changePasswordModal(); return; }
   if (action === 'remove-password') { removePasswordModal(); return; }
 
+  // snippets
+  if (action === 'new-snippet') { snippetModal(null); return; }
+  if (action === 'snippet-edit') {
+    const sn = (state.data.snippets || []).find((x) => x.id === actionEl.dataset.id);
+    if (sn) snippetModal(sn);
+    return;
+  }
+  if (action === 'snippet-delete') {
+    const sn = (state.data.snippets || []).find((x) => x.id === actionEl.dataset.id);
+    if (sn) deleteSnippetModal(sn);
+    return;
+  }
+
   if (action === 'theme') {
     state.data.settings.theme = actionEl.dataset.val;
     applyTheme(actionEl.dataset.val);
@@ -308,11 +325,17 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+// Esc закрывает модалку
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('#modal-root').innerHTML) closeModal();
+});
+
 // Поиск (input, без data-action)
 document.addEventListener('input', (e) => {
   if (e.target.id === 'keys-search') { state.searchKeys = e.target.value; renderKeys(); }
   if (e.target.id === 'aliases-search') { state.searchAliases = e.target.value; renderAliases(); }
   if (e.target.id === 'servers-search') { state.searchServers = e.target.value; renderServers(); }
+  if (e.target.id === 'snippets-search') { state.searchSnippets = e.target.value; renderSnippets(); }
 });
 
 // Тема через segmented в настройках

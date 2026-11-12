@@ -314,6 +314,25 @@ body {
 .server-foot .spacer { flex: 1; }
 .connect-btn { -webkit-app-region: no-drag; }
 
+/* ---------- Snippets ---------- */
+.snippet-list { display: flex; flex-direction: column; gap: 8px; }
+.snippet-card { padding: 0; overflow: hidden; }
+.snippet-main { display: flex; align-items: center; gap: 12px; padding: 13px 16px; }
+.snippet-glyph {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.snippet-info { flex: 1; min-width: 0; }
+.snippet-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.snippet-name { font-weight: 650; font-size: 15px; }
+.snippet-command {
+  font-family: var(--mono); font-size: 12px; color: var(--text-2);
+  margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  user-select: text;
+}
+.snippet-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
 /* ---------- Settings ---------- */
 .settings-body { display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
 .settings-card {
@@ -327,6 +346,7 @@ body {
   padding: 12px 0; border-top: 1px solid var(--border);
 }
 .setting-row:first-of-type { border-top: none; padding-top: 4px; }
+.setting-info { flex: 1; min-width: 0; }
 .setting-title { font-weight: 600; font-size: 13.5px; }
 .setting-info .muted { font-size: 12px; margin-top: 2px; }
 .setting-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -412,6 +432,28 @@ body {
   user-select: none;
 }
 .term-regex input { width: 15px; height: 15px; accent-color: var(--accent); }
+
+.term-snippets {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 0 30px 12px; -webkit-app-region: no-drag;
+}
+.term-snippets-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; max-height: 220px; overflow-y: auto; }
+.term-snippet {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--field-bg); color: var(--text); font: inherit;
+  cursor: pointer; text-align: left; transition: border-color .12s, background .12s;
+}
+.term-snippet:hover { border-color: var(--accent); background: var(--card-bg); }
+.term-snippet-name {
+  font-weight: 600; font-size: 13px; flex-shrink: 0; max-width: 140px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.term-snippet-cmd {
+  flex: 1; min-width: 0; font-size: 12px; color: var(--text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.term-snippets-empty { font-size: 13px; color: var(--text-3); padding: 8px 12px; }
 
 .term-tabs {
   display: flex; align-items: stretch; gap: 2px;
