@@ -437,16 +437,16 @@ body {
   display: flex; flex-direction: column; gap: 6px;
   padding: 0 30px 12px; -webkit-app-region: no-drag;
 }
-.term-snippets-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+.term-snippets-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; max-height: 220px; overflow-y: auto; }
 .term-snippet {
-  display: flex; align-items: center; gap: 12px;
-  padding: 8px 12px; border: 1px solid var(--border); border-radius: 9px;
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 9px;
   background: var(--field-bg); color: var(--text); font: inherit;
   cursor: pointer; text-align: left; transition: border-color .12s, background .12s;
 }
 .term-snippet:hover { border-color: var(--accent); background: var(--card-bg); }
 .term-snippet-name {
-  font-weight: 600; font-size: 13px; flex-shrink: 0; max-width: 180px;
+  font-weight: 600; font-size: 13px; flex-shrink: 0; max-width: 140px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .term-snippet-cmd {

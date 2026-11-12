@@ -421,7 +421,7 @@
       return;
     }
     box.innerHTML = snippets.map((s) => `
-      <button class="term-snippet" data-action="term-snippet-insert" data-id="${esc(s.id)}" title="Вставить команду" aria-label="Вставить команду: ${esc(s.name)}">
+      <button class="term-snippet" data-action="term-snippet-insert" data-id="${esc(s.id)}" title="${esc(s.command)}" aria-label="Вставить команду: ${esc(s.name)}">
         <span class="term-snippet-name">${esc(s.name)}</span>
         <span class="term-snippet-cmd mono">${esc(s.command)}</span>
       </button>`).join('');
