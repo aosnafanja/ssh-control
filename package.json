@@ -10,6 +10,7 @@
     "start": "electron .",
     "test": "node --test",
     "check:lines": "node scripts/check-line-limit.js",
+    "coverage": "c8 npm test",
     "package": "electron-builder --mac --dir",
     "dist": "electron-builder --mac"
   },
@@ -17,6 +18,7 @@
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-search": "^0.15.0",
     "@xterm/xterm": "^5.5.0",
+    "c8": "^12.0.0",
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0"
   },

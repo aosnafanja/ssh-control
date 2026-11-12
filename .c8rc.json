@@ -1,0 +1,6 @@
+{
+  "reporter": ["text", "text-summary"],
+  "exclude": ["test/**", "renderer/**", "scripts/**", "node_modules/**"],
+  "lines": 65,
+  "branches": 80
+}
