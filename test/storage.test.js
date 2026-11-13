@@ -34,6 +34,21 @@ test('storage.defaultData: базовая схема version 1', () => {
   });
 });
 
+test('storage.isValidBackup: валидные plain/encrypted и невалидные структуры', () => {
+  assert.strictEqual(storage.isValidBackup({ version: 1, data: { servers: [] } }), true);
+  assert.strictEqual(storage.isValidBackup({ version: 1, encrypted: false, data: { servers: [] } }), true);
+  assert.strictEqual(storage.isValidBackup({
+    version: 1, encrypted: true,
+    kdf: { salt: 'aa' }, iv: 'aa', tag: 'aa', ciphertext: 'aa'
+  }), true);
+
+  assert.strictEqual(storage.isValidBackup(null), false);
+  assert.strictEqual(storage.isValidBackup({}), false);
+  assert.strictEqual(storage.isValidBackup({ version: '1', data: {} }), false);
+  assert.strictEqual(storage.isValidBackup({ version: 1 }), false);
+  assert.strictEqual(storage.isValidBackup({ version: 1, encrypted: true, kdf: {} }), false);
+});
+
 test('storage: setMasterPassword + unlock round-trip на временной папке', () => {
   reset();
   const payload = {

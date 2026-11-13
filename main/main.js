@@ -108,6 +108,16 @@ function registerIpc() {
     return storage.exportBackup(res.filePath);
   });
 
+  ipcMain.handle('data:restoreBackup', async () => {
+    const res = await dialog.showOpenDialog(mainWindow, {
+      title: 'Выберите резервную копию',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    });
+    if (res.canceled) return null;
+    return storage.restoreBackup(res.filePaths[0]);
+  });
+
   ipcMain.handle('data:changeDir', async () => {
     const res = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory', 'createDirectory'],

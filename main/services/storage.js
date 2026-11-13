@@ -33,6 +33,22 @@ function loadRaw() {
   }
 }
 
+// Чистая проверка структуры data.json (без I/O) — вынесена отдельно для unit-тестов.
+// Принимает уже распарсенный объект: version — число; далее либо открытые данные
+// (encrypted !== true и объект data), либо зашифрованный блок (encrypted === true и
+// объект kdf + строки iv/tag/ciphertext).
+function isValidBackup(raw) {
+  if (!raw || typeof raw !== 'object') return false;
+  if (typeof raw.version !== 'number') return false;
+  if (raw.encrypted === true) {
+    return raw.kdf !== null && typeof raw.kdf === 'object' &&
+      typeof raw.iv === 'string' &&
+      typeof raw.tag === 'string' &&
+      typeof raw.ciphertext === 'string';
+  }
+  return raw.data !== null && typeof raw.data === 'object';
+}
+
 /* c8 ignore start */
 function savePrefs() {
   try {
@@ -174,9 +190,27 @@ function exportBackup(destPath) {
   return destPath;
 }
 
+function restoreBackup(srcPath) {
+  if (!srcPath) throw new Error('Не указан путь резервной копии');
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(srcPath, 'utf8'));
+  } catch {
+    throw new Error('Файл не является корректным JSON');
+  }
+  if (!isValidBackup(raw)) throw new Error('Неверный формат резервной копии');
+  fs.mkdirSync(dataDir, { recursive: true });
+  const tmp = dataFilePath() + '.tmp';
+  fs.copyFileSync(srcPath, tmp);
+  fs.renameSync(tmp, dataFilePath());
+  lock();
+  return true;
+}
+
 /* c8 ignore stop */
 module.exports = {
   defaultData,
+  isValidBackup,
   init,
   getState,
   getData,
@@ -186,5 +220,6 @@ module.exports = {
   setMasterPassword,
   changeDir,
   exportBackup,
+  restoreBackup,
   get dataDir() { return dataDir; }
 };
