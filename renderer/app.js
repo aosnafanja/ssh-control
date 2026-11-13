@@ -182,6 +182,20 @@ function restoreBackupConfirm() {
   `);
 }
 
+function exportKeysBackupModal() {
+  openModal(`
+    <h3>Экспорт ключей</h3>
+    <p class="muted">Ключи и конфигурация ~/.ssh будут сохранены в зашифрованный файл. Введите пароль для копии.</p>
+    <div class="field"><label>Пароль</label><input type="password" id="ekb-pass" placeholder="пароль"></div>
+    <div class="field"><label>Повторите пароль</label><input type="password" id="ekb-pass2" placeholder="ещё раз"></div>
+    <div class="form-error" id="ekb-error"></div>
+    <div class="modal-actions">
+      <button class="btn" data-action="modal-close">Отмена</button>
+      <button class="btn primary" data-action="export-keys-backup-confirm">Экспортировать</button>
+    </div>
+  `);
+}
+
 /* ---------- actions ---------- */
 function connectServer(server) {
   window.Term.openServer(server);
@@ -317,6 +331,19 @@ document.addEventListener('click', async (e) => {
       closeModal();
       if (res) { toast('Данные восстановлены'); location.reload(); }
     } catch (err) { toast(err.message || 'Ошибка', 'error'); closeModal(); }
+    return;
+  }
+  if (action === 'export-keys-backup') { exportKeysBackupModal(); return; }
+  if (action === 'export-keys-backup-confirm') {
+    const p1 = $('#ekb-pass').value;
+    const p2 = $('#ekb-pass2').value;
+    const errEl = $('#ekb-error');
+    if (!p1) { if (errEl) errEl.textContent = 'Введите пароль'; return; }
+    if (p1 !== p2) { if (errEl) errEl.textContent = 'Пароли не совпадают'; return; }
+    try {
+      const res = await bridge.exportKeysBackup(p1);
+      if (res) { closeModal(); toast('Копия ключей сохранена (' + res.count + ' файлов)'); }
+    } catch (err) { if (errEl) errEl.textContent = err.message || 'Ошибка'; }
     return;
   }
   if (action === 'set-password') { masterPasswordModal(); return; }
