@@ -7,6 +7,8 @@
   // значение (если в другой версии класс лежит сразу на window).
   const FitAddon = (window.FitAddon && window.FitAddon.FitAddon) || window.FitAddon;
   const SearchAddon = (window.SearchAddon && window.SearchAddon.SearchAddon) || window.SearchAddon;
+  // Модуль автодополнения (#14): подсказки из истории сессии и скроллбэка.
+  const Auto = window.Autocomplete;
 
   if (!Terminal || !FitAddon || !SearchAddon) {
     console.error('TERMINAL: xterm.js vendor files not loaded');
@@ -174,6 +176,7 @@
 
   function activatePane(tab, key) {
     tab.activeKey = key;
+    if (Auto) tab.panes.forEach((p) => Auto.dismiss(p));
     renderStage();
     const pane = findPane(tab, key);
     if (pane) setTimeout(() => fitPane(pane), 0);
@@ -277,12 +280,14 @@
 
     const pane = { key, term, fitAddon, searchAddon, el, bar, dot, label, body, status: 'connecting', sessionId: key, exitCode: null, observer: null };
     tab.panes.push(pane);
+    if (Auto) Auto.mount(pane);
 
     // Ввод с клавиатуры и вставка (Cmd+V) уходят в PTY этой панели; при
     // включённом broadcast ввод из активной панели дублируется в остальные.
     term.onData((data) => {
       if (!pane.sessionId) return;
       bridge.writeTerminal(pane.sessionId, data);
+      if (Auto) Auto.onInput(pane, data);
       if (broadcastOn && activePaneOf(tab) === pane) broadcastData(tab, pane, data);
     });
 
@@ -323,6 +328,7 @@
     const pane = tab.panes[idx];
     tab.panes.splice(idx, 1);
     if (pane.sessionId) bridge.killTerminal(pane.sessionId);
+    if (Auto) Auto.dispose(pane);
     if (pane.observer) pane.observer.disconnect();
     try { pane.term.dispose(); } catch (e) { /* ignore */ }
     if (pane.el && pane.el.parentNode) pane.el.parentNode.removeChild(pane.el);
@@ -344,6 +350,7 @@
     tabs.delete(key);
     for (const pane of t.panes) {
       if (pane.sessionId) bridge.killTerminal(pane.sessionId);
+      if (Auto) Auto.dispose(pane);
       if (pane.observer) pane.observer.disconnect();
       try { pane.term.dispose(); } catch (e) { /* ignore */ }
     }
@@ -467,6 +474,9 @@
     for (const p of tab.panes) {
       if (p === sourcePane || !p.sessionId) continue;
       bridge.writeTerminal(p.sessionId, data);
+      // Трекер ввода целевых панелей держим в синхронизации с PTY (подсказки
+      // там не показываются — ввод идёт из активной панели).
+      if (Auto) Auto.onBroadcast(p, data);
     }
   }
 
@@ -537,6 +547,11 @@
         return;
       }
       if (action === 'term-search-toggle') { toggleSearch(); return; }
+      if (action === 'term-ac-toggle') {
+        const p = activePane();
+        if (p && Auto) Auto.toggle(p);
+        return;
+      }
       if (action === 'term-snippets-toggle') { toggleSnippets(); return; }
       if (action === 'term-broadcast-toggle') { toggleBroadcast(); return; }
       if (action === 'term-snippet-insert') { insertSnippet(el.dataset.id); return; }

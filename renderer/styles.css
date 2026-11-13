@@ -534,6 +534,25 @@ body {
 
 .term-pane-body { flex: 1; min-height: 0; position: relative; padding: 8px 10px 10px; }
 .term-pane-body .xterm { height: 100%; }
+
+/* Подсказки автодополнения (#14): всплывающий список у курсора внутри панели */
+.term-ac {
+  position: absolute; z-index: 20; min-width: 240px; max-width: min(560px, 92%);
+  max-height: 240px; overflow-y: auto; padding: 4px;
+  background: var(--card-bg); border: 1px solid var(--border-strong);
+  border-radius: 10px; box-shadow: var(--shadow-md); -webkit-app-region: no-drag;
+}
+.term-ac-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 5px 8px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--text); font: inherit; font-size: 12.5px;
+  text-align: left; cursor: pointer; white-space: nowrap;
+}
+.term-ac-item:hover, .term-ac-item.active { background: var(--hover); }
+.term-ac-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
+.term-ac-text b { color: var(--accent); font-weight: 600; }
+.term-ac-kind { flex-shrink: 0; font-size: 11px; color: var(--text-3); }
+.term-ac-hint { padding: 5px 8px 2px; margin-top: 4px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-3); }
 .term-empty {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   color: var(--text-3); text-align: center; padding: 40px 20px;
