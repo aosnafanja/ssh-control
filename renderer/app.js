@@ -171,6 +171,17 @@ function openModal(html) {
 }
 function closeModal() { $('#modal-root').innerHTML = ''; }
 
+function restoreBackupConfirm() {
+  openModal(`
+    <h3>Восстановить из копии?</h3>
+    <p class="muted">Текущие данные будут заменены данными из выбранного файла. Это необратимо.</p>
+    <div class="modal-actions">
+      <button class="btn" data-action="modal-close">Отмена</button>
+      <button class="btn primary" data-action="restore-backup-confirm">Восстановить</button>
+    </div>
+  `);
+}
+
 /* ---------- actions ---------- */
 function connectServer(server) {
   window.Term.openServer(server);
@@ -297,6 +308,15 @@ document.addEventListener('click', async (e) => {
   if (action === 'export-backup') {
     const res = await bridge.exportBackup();
     if (res) toast('Резервная копия сохранена');
+    return;
+  }
+  if (action === 'restore-backup') { restoreBackupConfirm(); return; }
+  if (action === 'restore-backup-confirm') {
+    try {
+      const res = await bridge.restoreBackup();
+      closeModal();
+      if (res) { toast('Данные восстановлены'); location.reload(); }
+    } catch (err) { toast(err.message || 'Ошибка', 'error'); closeModal(); }
     return;
   }
   if (action === 'set-password') { masterPasswordModal(); return; }

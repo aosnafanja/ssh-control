@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   save: (data) => ipcRenderer.invoke('data:save', data),
   openDataDir: () => ipcRenderer.invoke('data:openDir'),
   exportBackup: () => ipcRenderer.invoke('data:exportBackup'),
+  restoreBackup: () => ipcRenderer.invoke('data:restoreBackup'),
   changeDataDir: () => ipcRenderer.invoke('data:changeDir'),
 
   // Connect
