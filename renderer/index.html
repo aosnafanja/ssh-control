@@ -176,6 +176,9 @@
             <button class="icon-btn" id="term-snippets-toggle" data-action="term-snippets-toggle" title="Сниппеты" aria-label="Сниппеты" aria-pressed="false">
               <svg viewBox="0 0 24 24" class="ico"><path d="m8 6-6 6 6 6"/><path d="m16 6 6 6-6 6"/></svg>
             </button>
+            <button class="icon-btn" id="term-ac-toggle" data-action="term-ac-toggle" title="Подсказки команд (⌘;)" aria-label="Подсказки команд">
+              <svg viewBox="0 0 24 24" class="ico"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="m5.6 5.6 2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+            </button>
             <button class="btn ghost" id="term-broadcast-toggle" data-action="term-broadcast-toggle" title="Вещание" aria-label="Вещание выключено" aria-pressed="false">Вещание</button>
             <button class="btn ghost" data-action="term-search-toggle" title="Поиск по выводу" aria-label="Поиск по выводу">
               <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -332,7 +335,22 @@
             <div class="hotkey-row">
               <span class="hotkey-kbd">Esc</span>
               <span class="muted" aria-hidden="true">→</span>
-              <span>Закрыть панель поиска / панель сниппетов</span>
+              <span>Закрыть панель поиска / сниппетов / подсказки</span>
+            </div>
+            <div class="hotkey-row">
+              <span class="hotkey-kbd">⌘;</span>
+              <span class="muted" aria-hidden="true">→</span>
+              <span>Подсказки автодополнения (открыть / скрыть)</span>
+            </div>
+            <div class="hotkey-row">
+              <span class="hotkey-kbd">↑ / ↓</span>
+              <span class="muted" aria-hidden="true">→</span>
+              <span>Выбрать подсказку, когда список открыт</span>
+            </div>
+            <div class="hotkey-row">
+              <span class="hotkey-kbd">Tab</span>
+              <span class="muted" aria-hidden="true">→</span>
+              <span>Принять подсказку (иначе — дополнение оболочки)</span>
             </div>
 
             <h4 class="hotkey-group">Общие</h4>
@@ -379,6 +397,7 @@
   <script src="servers.js"></script>
   <script src="settings.js"></script>
   <script src="snippets.js"></script>
+  <script src="autocomplete.js"></script>
   <script src="terminal.js"></script>
 </body>
 </html>
