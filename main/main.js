@@ -9,6 +9,7 @@ const storage = require('./services/storage');
 const connect = require('./services/connect');
 const sshConfig = require('./services/sshConfig');
 const terminal = require('./services/terminal');
+const keysBackup = require('./services/keysBackup');
 
 let mainWindow = null;
 
@@ -125,6 +126,17 @@ function registerIpc() {
     });
     if (res.canceled) return null;
     return storage.changeDir(res.filePaths[0]);
+  });
+
+  // ---- Keys backup ----
+  ipcMain.handle('keysbackup:export', async (_e, password) => {
+    const res = await dialog.showSaveDialog(mainWindow, {
+      title: 'Куда сохранить копию ключей?',
+      defaultPath: path.join(os.homedir(), 'Downloads', 'ssh-control-keys-backup.json'),
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    });
+    if (res.canceled) return null;
+    return keysBackup.exportKeysBackup(res.filePath, password);
   });
 
   // ---- Connect ----
