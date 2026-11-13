@@ -3,6 +3,7 @@ dist/
 coverage/
 .npm-cache/
 .electron-cache/
+.electron-builder-cache/
 .eb-cache/
 .userdata/
 .cache/
