@@ -340,14 +340,35 @@
     applyInput(pane, data);
   }
 
+  // Эхо команды уже на экране к моменту Enter: если набранного текста в
+  // текущей строке нет (приглашение пароля со скрытым вводом), в историю не
+  // пишем — иначе подсказки могли бы показать набранный секрет.
+  function echoProbes(typed) {
+    const probes = [typed];
+    if (typed.length > 1) probes.push(typed.slice(0, -1));
+    return probes;
+  }
+
+  function wasEchoed(pane, typed) {
+    const buffer = pane.term && pane.term.buffer ? pane.term.buffer.active : null;
+    if (!buffer) return false;
+    const line = buffer.getLine(buffer.baseY + buffer.cursorY);
+    if (!line) return false;
+    const shown = line.translateToString(true);
+    return echoProbes(typed).some((probe) => probe.length >= 2 && shown.indexOf(probe) >= 0);
+  }
+
   function applyInput(pane, data) {
     const ac = ensure(pane);
     if (!ac) return null;
     const raw = data == null ? '' : String(data);
-    if (ac.state.known && raw === '\r' && ac.state.text.trim()) {
-      ac.history = recordCommand(ac.history, ac.state.text, HISTORY_CAP);
-      ac.histSeq++;
-      ac.cache = null;
+    if (ac.state.known && raw === '\r') {
+      const typed = ac.state.text.trim();
+      if (typed && wasEchoed(pane, typed)) {
+        ac.history = recordCommand(ac.history, typed, HISTORY_CAP);
+        ac.histSeq++;
+        ac.cache = null;
+      }
     }
     ac.state = trackInput(ac.state, raw);
     ac.index = 0;
