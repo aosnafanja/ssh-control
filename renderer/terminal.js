@@ -55,6 +55,7 @@
   let seq = 0;
   let searchVisible = false;
   let snippetsVisible = false;
+  let broadcastOn = false;
 
   /* ---------- theme ---------- */
   function termThemePreference() {
@@ -168,6 +169,7 @@
     render();
     const t = tabs.get(key);
     if (t) setTimeout(() => fitAll(t), 0);
+    syncBroadcast();
   }
 
   function activatePane(tab, key) {
@@ -276,9 +278,13 @@
     const pane = { key, term, fitAddon, searchAddon, el, bar, dot, label, body, status: 'connecting', sessionId: key, exitCode: null, observer: null };
     tab.panes.push(pane);
 
-    // Ввод с клавиатуры и вставка (Cmd+V) уходят в PTY только этой панели —
-    // у каждой панели свой onData → свой writeTerminal(sessionId).
-    term.onData((data) => { if (pane.sessionId) bridge.writeTerminal(pane.sessionId, data); });
+    // Ввод с клавиатуры и вставка (Cmd+V) уходят в PTY этой панели; при
+    // включённом broadcast ввод из активной панели дублируется в остальные.
+    term.onData((data) => {
+      if (!pane.sessionId) return;
+      bridge.writeTerminal(pane.sessionId, data);
+      if (broadcastOn && activePaneOf(tab) === pane) broadcastData(tab, pane, data);
+    });
 
     const observer = new ResizeObserver(() => fitPane(pane));
     observer.observe(body);
@@ -308,6 +314,7 @@
     // «вертикально» = row (бок о бок), «горизонтально» = column (стопкой).
     tab.direction = direction;
     createPane(tab, tab.payload);
+    syncBroadcast();
   }
 
   function closePane(tab, key) {
@@ -328,6 +335,7 @@
     renderStage();
     const ap = activePaneOf(tab);
     if (ap) setTimeout(() => { fitPane(ap); ap.term.focus(); }, 0);
+    syncBroadcast();
   }
 
   function closeTab(key) {
@@ -347,6 +355,7 @@
       const ap = activePaneOf(next);
       if (ap) setTimeout(() => fitPane(ap), 0);
     }
+    syncBroadcast();
   }
 
   function switchPane(tab, delta) {
@@ -445,6 +454,57 @@
     bridge.writeTerminal(pane.sessionId, sn.command);
   }
 
+  /* ---------- broadcast ---------- */
+  // Вещание: ввод из активной панели дублируется во все остальные панели той же
+  // вкладки (один ввод → N серверов). Флаг модульный — один на весь терминал;
+  // число целей N всегда пересчитывается от активной вкладки.
+  function broadcastTargetsCount() {
+    const t = activeTab();
+    return t ? Math.max(0, t.panes.length - 1) : 0;
+  }
+
+  function broadcastData(tab, sourcePane, data) {
+    for (const p of tab.panes) {
+      if (p === sourcePane || !p.sessionId) continue;
+      bridge.writeTerminal(p.sessionId, data);
+    }
+  }
+
+  function renderBroadcastBtn() {
+    const btn = $('#term-broadcast-toggle');
+    if (!btn) return;
+    const n = broadcastTargetsCount();
+    btn.classList.toggle('ghost', !broadcastOn);
+    btn.classList.toggle('primary', broadcastOn);
+    btn.setAttribute('aria-pressed', String(broadcastOn));
+    btn.setAttribute('aria-label', broadcastOn
+      ? 'Вещание включено: ввод идёт на ' + n + ' панелей'
+      : 'Вещание выключено');
+    btn.textContent = broadcastOn ? 'Вещание · ' + n : 'Вещание';
+  }
+
+  function syncBroadcast() {
+    if (broadcastOn && broadcastTargetsCount() < 1) broadcastOn = false;
+    renderBroadcastBtn();
+  }
+
+  function toggleBroadcast() {
+    if (broadcastOn) {
+      broadcastOn = false;
+      toast('Вещание выключено');
+      renderBroadcastBtn();
+      return;
+    }
+    const n = broadcastTargetsCount();
+    if (n < 1) {
+      toast('Нет других панелей', 'error');
+      return;
+    }
+    broadcastOn = true;
+    toast('Вещание включено: ввод идёт на ' + n + ' панелей');
+    renderBroadcastBtn();
+  }
+
   /* ---------- init ---------- */
   function init() {
     bridge.onTermData(onData);
@@ -452,6 +512,7 @@
 
     renderThemeSeg();
     render();
+    syncBroadcast();
 
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-action]');
@@ -477,6 +538,7 @@
       }
       if (action === 'term-search-toggle') { toggleSearch(); return; }
       if (action === 'term-snippets-toggle') { toggleSnippets(); return; }
+      if (action === 'term-broadcast-toggle') { toggleBroadcast(); return; }
       if (action === 'term-snippet-insert') { insertSnippet(el.dataset.id); return; }
       if (action === 'term-search-next') { doSearch(false); return; }
       if (action === 'term-search-prev') {
