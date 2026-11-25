@@ -159,6 +159,36 @@ async function copyText(text) {
   }
 }
 
+/* ---------- edit-команды из главного меню ---------- */
+// xterm.js хранит выделение вне DOM-selection, поэтому нативные роли Edit его не
+// копируют и не выделяют (#45). Меню присылает команды сюда: терминал обрабатывает
+// свои панели сам (window.Term.editCommand), остальные поля — DOM-командами.
+function handleEditCommand(command, text) {
+  if (window.Term && window.Term.editCommand && window.Term.editCommand(command, text)) return;
+  const el = document.activeElement;
+  if (command === 'select-all') { document.execCommand('selectAll'); return; }
+  if (command === 'cut') { cutSelection(el); return; }
+  if (command === 'copy') { document.execCommand('copy'); return; }
+  if (command === 'paste' && el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+    document.execCommand('insertText', false, text || '');
+  }
+}
+
+// execCommand('cut') в Electron не срабатывает без доверенного пользовательского
+// события, поэтому вырезание в полях делаем вручную: буфер + удаление выделения.
+function cutSelection(el) {
+  if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') || typeof el.selectionStart !== 'number') {
+    document.execCommand('cut');
+    return;
+  }
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  if (start === end) return;
+  copyText(el.value.slice(start, end));
+  el.setRangeText('', start, end, 'end');
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 /* ---------- modals ---------- */
 function openModal(html) {
   const root = $('#modal-root');
@@ -418,6 +448,8 @@ async function unlockHandler() {
     $('#unlock-password').select();
   }
 }
+
+bridge.onEditCommand(handleEditCommand);
 
 init().catch((err) => {
   console.error('INIT ERROR:', err);
