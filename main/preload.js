@@ -46,6 +46,9 @@ contextBridge.exposeInMainWorld('api', {
   onTermData: (cb) => { ipcRenderer.on('term:data', (_e, id, data) => cb(id, data)); },
   onTermExit: (cb) => { ipcRenderer.on('term:exit', (_e, id, code) => cb(id, code)); },
 
+  // Edit-команды из главного меню (xterm не видит нативные copy/selectAll, #45)
+  onEditCommand: (cb) => { ipcRenderer.on('edit:command', (_e, command, text) => cb(command, text)); },
+
   // Misc
   getHome: () => ipcRenderer.invoke('app:home'),
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, nativeTheme, Menu, clipboard } = require('electron');
 const path = require('path');
 const os = require('os');
 
@@ -16,10 +16,46 @@ let mainWindow = null;
 // Дефолтное меню Electron вешает ⌘W на «Close Window». Оно нужно встроенному
 // терминалу для закрытия активной split-панели (renderer/terminal.js), поэтому
 // меню собирается явно без пункта «Close Window» — ⌘W свободно для рендера.
+//
+// Edit-меню тоже собирается явно (#45): выделение xterm.js не является
+// DOM-выделением, поэтому нативные роли Copy/Select All его не видят. Пункты
+// отправляют команду в рендер, а текст для вставки читает main — у рендера нет
+// разрешения на чтение буфера обмена.
+function sendEditCommand(command) {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!win || win.isDestroyed()) return;
+  if (command !== 'paste') {
+    win.webContents.send('edit:command', command, '');
+    return;
+  }
+  // В Electron 45 clipboard.readText() — асинхронный (возвращает Promise).
+  // Отправляем текст только после разрешения, иначе IPC-аргумент не сериализуется.
+  Promise.resolve(clipboard.readText()).then((text) => {
+    if (win.isDestroyed()) return;
+    win.webContents.send('edit:command', 'paste', typeof text === 'string' ? text : String(text == null ? '' : text));
+  });
+}
+
+function buildEditMenu() {
+  return {
+    label: 'Edit',
+    submenu: [
+      { role: 'undo' },
+      { role: 'redo' },
+      { type: 'separator' },
+      { label: 'Cut', accelerator: 'CmdOrCtrl+X', click: () => sendEditCommand('cut') },
+      { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => sendEditCommand('copy') },
+      { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: () => sendEditCommand('paste') },
+      { type: 'separator' },
+      { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: () => sendEditCommand('select-all') }
+    ]
+  };
+}
+
 function buildAppMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { role: 'appMenu' },
-    { role: 'editMenu' },
+    buildEditMenu(),
     { role: 'viewMenu' },
     { role: 'windowMenu' }
   ]));

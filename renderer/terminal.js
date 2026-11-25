@@ -515,6 +515,36 @@
     renderBroadcastBtn();
   }
 
+  /* ---------- edit-команды меню ---------- */
+  // Выделение xterm.js не видно нативным ролям Edit (#45): команда приходит из
+  // меню, обрабатываем её здесь. true — команду забрал терминал, иначе рендер
+  // делает DOM-фолбэк для обычных полей.
+  function focusedTerminalPane() {
+    const tab = activeTab();
+    const el = document.activeElement;
+    if (!tab || !el) return null;
+    for (const p of tab.panes) {
+      if (p.term && p.term.element && p.term.element.contains(el)) return p;
+    }
+    return null;
+  }
+
+  function editCommand(command, text) {
+    const pane = focusedTerminalPane();
+    if (!pane) return false;
+    if (command === 'copy') {
+      if (pane.term.hasSelection()) copyText(pane.term.getSelection());
+      return true;
+    }
+    if (command === 'cut') return true; // в терминале вырезать нечего
+    if (command === 'paste') {
+      if (typeof text === 'string' && text) pane.term.paste(text);
+      return true;
+    }
+    if (command === 'select-all') { pane.term.selectAll(); return true; }
+    return false;
+  }
+
   /* ---------- init ---------- */
   function init() {
     bridge.onTermData(onData);
@@ -652,6 +682,6 @@
     }
   }
 
-  window.Term = { openServer, openAlias, closeTab, renderSnippets: renderTermSnippets };
+  window.Term = { openServer, openAlias, closeTab, renderSnippets: renderTermSnippets, editCommand };
   init();
 })();
