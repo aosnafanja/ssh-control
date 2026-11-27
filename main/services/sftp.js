@@ -134,6 +134,9 @@ function mapConnectError(err, server) {
     if (server.authMethod === 'password') return new Error('Не удалось войти: проверьте пароль сервера');
     return new Error(`Не удалось войти по ключу — загрузите его в ssh-agent: ${sshAddHint(server)}`);
   }
+  if (/privatekey|parse key|parse/i.test(message)) {
+    return new Error(`Не удалось прочитать ключ — проверьте файл или загрузите в ssh-agent: ${sshAddHint(server)}`);
+  }
   if (/timed out|timeout/i.test(message)) return new Error('Сервер не ответил вовремя');
   return new Error('Не удалось подключиться к серверу');
 }
@@ -228,7 +231,9 @@ function openClient(config) {
       settled = true;
       resolve(client);
     });
-    client.once('error', fail);
+    // on, не once: после отказа клиент может эмитить второй error сокета
+    // (ECONNRESET) — без слушателя это уронило бы main-процесс.
+    client.on('error', fail);
     try {
       client.connect(config);
     } catch (err) {

@@ -249,6 +249,18 @@ test('mapConnectError: фиксированные тексты ошибок', ()
   assert.strictEqual(sftp.mapConnectError(null, server()).message, 'Не удалось подключиться к серверу');
 });
 
+test('mapConnectError: повреждённый ключ — понятный текст без сырого message', () => {
+  const mapped = sftp.mapConnectError(
+    new Error('Cannot parse privateKey: error:1E08010C:DECODER routines::unsupported'),
+    keyServer()
+  );
+  assert.strictEqual(
+    mapped.message,
+    'Не удалось прочитать ключ — проверьте файл или загрузите в ssh-agent: ssh-add ~/.ssh/id_ed25519'
+  );
+  assert.ok(!mapped.message.includes('DECODER'), 'сырой message не должен утекать');
+});
+
 test('mapConnectError: сырой message, пароль и ключ не утекают в текст', () => {
   const rawMessage = 'boom password=' + PASSWORD + ' key=' + PRIVATE_KEY.toString('utf8');
   const mapped = sftp.mapConnectError(new Error(rawMessage), keyServer());
