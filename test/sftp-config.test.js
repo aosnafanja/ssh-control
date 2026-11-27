@@ -153,3 +153,107 @@ test('connect: keyPath вне ~/.ssh отклоняется до сети', asyn
     sftp.setHostKeyVerifier(null);
   }
 });
+
+test('buildAuthCandidates: key — сначала agent, затем privateKey (без дублей)', () => {
+  const candidates = sftp.buildAuthCandidates(keyServer(), {
+    agent: '/tmp/ssh-agent.sock',
+    privateKey: PRIVATE_KEY
+  });
+  assert.deepStrictEqual(candidates, [
+    { agent: '/tmp/ssh-agent.sock' },
+    { privateKey: PRIVATE_KEY }
+  ]);
+});
+
+test('buildAuthCandidates: key — только agent или только ключ', () => {
+  assert.deepStrictEqual(
+    sftp.buildAuthCandidates(keyServer(), { agent: '/tmp/a.sock' }),
+    [{ agent: '/tmp/a.sock' }]
+  );
+  assert.deepStrictEqual(
+    sftp.buildAuthCandidates(keyServer(), { privateKey: PRIVATE_KEY }),
+    [{ privateKey: PRIVATE_KEY }]
+  );
+  // Пустой agent не становится кандидатом.
+  assert.deepStrictEqual(
+    sftp.buildAuthCandidates(keyServer(), { agent: '', privateKey: PRIVATE_KEY }),
+    [{ privateKey: PRIVATE_KEY }]
+  );
+});
+
+test('buildAuthCandidates: password — один кандидат (credentials или данные сервера)', () => {
+  assert.deepStrictEqual(
+    sftp.buildAuthCandidates(server(), { password: PASSWORD }),
+    [{ password: PASSWORD }]
+  );
+  assert.deepStrictEqual(
+    sftp.buildAuthCandidates(server({ password: PASSWORD }), {}),
+    [{ password: PASSWORD }]
+  );
+  assert.throws(() => sftp.buildAuthCandidates(server(), {}), /Нет пароля сервера/);
+  assert.throws(() => sftp.buildAuthCandidates(server(), { password: '' }), /Нет пароля сервера/);
+});
+
+test('buildAuthCandidates: key без способов авторизации — ошибка ssh-add', () => {
+  assert.throws(
+    () => sftp.buildAuthCandidates(keyServer(), {}),
+    /Ключ недоступен — загрузите в ssh-agent: ssh-add ~\/\.ssh\/id_ed25519/
+  );
+  assert.throws(
+    () => sftp.buildAuthCandidates(keyServer(), { agent: '', privateKey: null }),
+    /Ключ недоступен/
+  );
+  assert.throws(
+    () => sftp.buildAuthCandidates(server({ authMethod: 'agent' }), {}),
+    /Неизвестный способ аутентификации/
+  );
+});
+
+test('isAuthError: отказ авторизации — true, сеть/host key/пароль ключа — false', () => {
+  assert.strictEqual(sftp.isAuthError(new Error('All configured authentication methods failed')), true);
+  assert.strictEqual(sftp.isAuthError(new Error('Authentication failed')), true);
+  assert.strictEqual(sftp.isAuthError(new Error('Timed out while waiting for handshake')), false);
+  assert.strictEqual(sftp.isAuthError(new Error('Host denied (verification failed)')), false);
+  assert.strictEqual(
+    sftp.isAuthError(new Error('Encrypted private OpenSSH key detected, but no passphrase given')),
+    false
+  );
+  assert.strictEqual(sftp.isAuthError(null), false);
+  assert.strictEqual(sftp.isAuthError({}), false);
+});
+
+test('mapConnectError: фиксированные тексты ошибок', () => {
+  assert.strictEqual(
+    sftp.mapConnectError(new Error('All configured authentication methods failed'), server()).message,
+    'Не удалось войти: проверьте пароль сервера'
+  );
+  assert.strictEqual(
+    sftp.mapConnectError(new Error('All configured authentication methods failed'), keyServer()).message,
+    'Не удалось войти по ключу — загрузите его в ssh-agent: ssh-add ~/.ssh/id_ed25519'
+  );
+  assert.strictEqual(
+    sftp.mapConnectError(
+      new Error('Cannot parse privateKey: Encrypted private OpenSSH key detected, but no passphrase given'),
+      keyServer()
+    ).message,
+    'Ключ защищён парольной фразой — загрузите в ssh-agent: ssh-add ~/.ssh/id_ed25519'
+  );
+  assert.strictEqual(
+    sftp.mapConnectError(new Error('Timed out while waiting for handshake'), server()).message,
+    'Сервер не ответил вовремя'
+  );
+  assert.strictEqual(
+    sftp.mapConnectError(new Error('connect ECONNREFUSED 127.0.0.1:22'), server()).message,
+    'Не удалось подключиться к серверу'
+  );
+  assert.strictEqual(sftp.mapConnectError(null, server()).message, 'Не удалось подключиться к серверу');
+});
+
+test('mapConnectError: сырой message, пароль и ключ не утекают в текст', () => {
+  const rawMessage = 'boom password=' + PASSWORD + ' key=' + PRIVATE_KEY.toString('utf8');
+  const mapped = sftp.mapConnectError(new Error(rawMessage), keyServer());
+  assert.ok(!mapped.message.includes(rawMessage));
+  assert.ok(!mapped.message.includes(PASSWORD));
+  assert.ok(!mapped.message.includes('BEGIN OPENSSH'));
+  assert.ok(!mapped.message.includes('boom'));
+});

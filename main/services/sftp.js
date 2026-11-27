@@ -108,35 +108,77 @@ function keyFilePath(server) {
 
 function readPrivateKey(server) {
   const file = keyFilePath(server);
-  /* c8 ignore start -- чтение ФС проверяется ручным smoke-тестом (PROMPT-SFTP §10.2) */
+  // Чтение файла проверяется ручным smoke-тестом (PROMPT-SFTP §10.2).
   try {
     return fs.readFileSync(file);
   } catch {
     throw new Error(`Ключ недоступен — загрузите в ssh-agent: ${sshAddHint(server)}`);
   }
-  /* c8 ignore stop */
 }
 
-/* c8 ignore start -- сетевой слой ssh2 не покрывается unit-тестами (PROMPT-SFTP §10.2) */
+// Отказ аутентификации — единственная ошибка, после которой имеет смысл
+// пробовать следующий способ авторизации (agent → ключ из файла).
+function isAuthError(err) {
+  const message = String((err && err.message) || '');
+  return /authentication/i.test(message);
+}
+
+// Ошибки ssh2 переводятся в наши фиксированные тексты: сырой err.message
+// (и любые секреты в нём) наружу не отдаётся.
+function mapConnectError(err, server) {
+  const message = String((err && err.message) || '');
+  if (/encrypted|passphrase/i.test(message)) {
+    return new Error(`Ключ защищён парольной фразой — загрузите в ssh-agent: ${sshAddHint(server)}`);
+  }
+  if (isAuthError(err)) {
+    if (server.authMethod === 'password') return new Error('Не удалось войти: проверьте пароль сервера');
+    return new Error(`Не удалось войти по ключу — загрузите его в ssh-agent: ${sshAddHint(server)}`);
+  }
+  if (/timed out|timeout/i.test(message)) return new Error('Сервер не ответил вовремя');
+  return new Error('Не удалось подключиться к серверу');
+}
+
+/**
+ * Упорядоченные кандидаты авторизации: connect() пробует их по одному
+ * отдельным подключением, пока не сработает. Для ключа первый кандидат —
+ * ssh-agent, второй — ключ из файла (PROMPT-SFTP §7.2).
+ * @param {object} server данные сервера из data.json
+ * @param {{password?: string, agent?: string|null, privateKey?: Buffer}} [credentials]
+ * @returns {Array<object>} кандидаты для buildConnectConfig()
+ */
+function buildAuthCandidates(server, credentials) {
+  const s = server || {};
+  const creds = credentials || {};
+
+  if (s.authMethod === 'password') {
+    const password = creds.password != null ? creds.password : s.password;
+    if (password === undefined || password === null || password === '') {
+      throw new Error('Нет пароля сервера');
+    }
+    return [{ password: String(password) }];
+  }
+
+  if (s.authMethod === 'key') {
+    const candidates = [];
+    if (typeof creds.agent === 'string' && creds.agent.length > 0) {
+      candidates.push({ agent: creds.agent });
+    }
+    if (Buffer.isBuffer(creds.privateKey)) {
+      candidates.push({ privateKey: creds.privateKey });
+    }
+    if (candidates.length === 0) {
+      throw new Error(`Ключ недоступен — загрузите в ssh-agent: ${sshAddHint(s)}`);
+    }
+    return candidates;
+  }
+
+  throw new Error('Неизвестный способ аутентификации');
+}
+
 function resolveServerId(server) {
   if (server.id) return String(server.id);
   if (server.name) return String(server.name);
   return String(server.host || '');
-}
-
-// Секреты для конфига: пароль — из расшифрованного хранилища (auth), ключ —
-// читается здесь, в main. Агент имеет приоритет и позволяет не читать ключ.
-function buildAuthForConnect(server, auth) {
-  const provided = auth || {};
-  if (server.authMethod === 'password') {
-    return { password: provided.password != null ? provided.password : server.password };
-  }
-  if (server.authMethod === 'key') {
-    const agent = provided.agent !== undefined ? provided.agent : process.env.SSH_AUTH_SOCK;
-    if (typeof agent === 'string' && agent.length > 0) return { agent };
-    return { privateKey: readPrivateKey(server) };
-  }
-  return provided;
 }
 
 function nextSessionId() {
@@ -144,6 +186,29 @@ function nextSessionId() {
   return SESSION_ID_PREFIX + Date.now().toString(36) + seq.toString(36);
 }
 
+// Секреты для конфига подготавливаются один раз: пароль — из расшифрованного
+// хранилища, agent — из аргумента или SSH_AUTH_SOCK, ключ — читается здесь,
+// в main. Ошибка чтения ключа не фатальна, если есть агент: кандидат {agent}
+// может дать доступ без файла.
+function prepareCredentials(server, auth) {
+  const provided = auth || {};
+  if (server.authMethod === 'password') {
+    return { password: provided.password != null ? provided.password : server.password };
+  }
+  if (server.authMethod !== 'key') return {};
+
+  const agent = provided.agent !== undefined ? provided.agent : process.env.SSH_AUTH_SOCK;
+  const credentials = { agent };
+  try {
+    credentials.privateKey = readPrivateKey(server);
+  } catch (err) {
+    // Без агента показываем исходную ошибку: границы пути или ssh-add.
+    if (typeof agent !== 'string' || agent.length === 0) throw err;
+  }
+  return credentials;
+}
+
+/* c8 ignore start -- сетевой слой ssh2 не покрывается unit-тестами (PROMPT-SFTP §10.2) */
 function openClient(config) {
   return new Promise((resolve, reject) => {
     const client = new Client();
@@ -186,18 +251,65 @@ function readHome(sftp) {
   });
 }
 
-function toConnectError(err, server) {
-  const message = String((err && err.message) || '');
-  if (/encrypted|passphrase/i.test(message)) {
-    return new Error(`Ключ защищён парольной фразой — загрузите в ssh-agent: ${sshAddHint(server)}`);
+/**
+ * Открывает SFTP-сессию: ssh2 Client → ready → SFTP-подсистема.
+ * Сначала пробуется agent, при отказе авторизации — ключ из файла.
+ * @param {object} server данные сервера из data.json
+ * @param {{password?: string, agent?: string|null}} [auth] секреты из расшифрованного хранилища
+ * @returns {Promise<{sessionId: string, home: string}>}
+ */
+async function connect(server, auth) {
+  // fail-closed: без проверки host key соединение невозможно
+  if (typeof hostKeyVerifier !== 'function') throw new Error('Проверка host key не настроена');
+
+  const s = validateServer(server);
+  const candidates = buildAuthCandidates(s, prepareCredentials(s, auth));
+
+  let client = null;
+  for (let i = 0; i < candidates.length; i += 1) {
+    const config = buildConnectConfig(s, candidates[i]);
+    config.hostVerifier = hostKeyVerifier;
+    try {
+      client = await openClient(config);
+      break;
+    } catch (err) {
+      const hasNext = i < candidates.length - 1;
+      // Отказ авторизации — пробуем следующий способ (agent → ключ из файла).
+      // openClient уже закрыл неудачный клиент перед reject.
+      if (isAuthError(err) && hasNext) continue;
+      throw mapConnectError(err, s);
+    }
   }
-  if (/authentication/i.test(message)) {
-    if (server.authMethod === 'password') return new Error('Не удалось войти: проверьте пароль сервера');
-    return new Error(`Не удалось войти по ключу — загрузите его в ssh-agent: ${sshAddHint(server)}`);
+  if (!client) throw mapConnectError(null, s);
+
+  let sftp;
+  try {
+    sftp = await openSftp(client);
+  } catch {
+    try {
+      client.end();
+    } catch {
+      // соединение уже могло закрыться
+    }
+    throw new Error('Не удалось открыть SFTP-подсистему');
   }
-  if (/timed out|timeout/i.test(message)) return new Error('Сервер не ответил вовремя');
-  return new Error('Не удалось подключиться к серверу');
+
+  const now = Date.now();
+  const session = {
+    sessionId: nextSessionId(),
+    client,
+    sftp,
+    serverId: resolveServerId(s),
+    connectedAt: now,
+    lastAt: now
+  };
+  sessions.set(session.sessionId, session);
+  watchClient(session);
+  ensureIdleSweepTimer();
+
+  return { sessionId: session.sessionId, home: await readHome(sftp) };
 }
+/* c8 ignore stop */
 
 function closeSession(session, reason) {
   if (!session || !sessions.delete(session.sessionId)) return false;
@@ -211,11 +323,6 @@ function closeSession(session, reason) {
     session.client.end();
   } catch {
     // соединение могло разорваться раньше
-  }
-  try {
-    session.client.destroy();
-  } catch {
-    // destroy() идемпотентен, но не должен ронять закрытие сессии
   }
   emit('sftp:session-closed', session.sessionId, reason || 'closed');
   return true;
@@ -255,56 +362,6 @@ function stopIdleSweepTimer() {
   }
 }
 
-/**
- * Открывает SFTP-сессию: ssh2 Client → ready → SFTP-подсистема.
- * @param {object} server данные сервера из data.json
- * @param {{password?: string, agent?: string|null}} [auth] секреты из расшифрованного хранилища
- * @returns {Promise<{sessionId: string, home: string}>}
- */
-async function connect(server, auth) {
-  // fail-closed: без проверки host key соединение невозможно
-  if (typeof hostKeyVerifier !== 'function') throw new Error('Проверка host key не настроена');
-
-  const s = validateServer(server);
-  const config = buildConnectConfig(s, buildAuthForConnect(s, auth));
-  config.hostVerifier = hostKeyVerifier;
-
-  let client;
-  try {
-    client = await openClient(config);
-  } catch (err) {
-    throw toConnectError(err, s);
-  }
-
-  let sftp;
-  try {
-    sftp = await openSftp(client);
-  } catch {
-    try {
-      client.end();
-    } catch {
-      // соединение уже могло закрыться
-    }
-    throw new Error('Не удалось открыть SFTP-подсистему');
-  }
-
-  const now = Date.now();
-  const session = {
-    sessionId: nextSessionId(),
-    client,
-    sftp,
-    serverId: resolveServerId(s),
-    connectedAt: now,
-    lastAt: now
-  };
-  sessions.set(session.sessionId, session);
-  watchClient(session);
-  ensureIdleSweepTimer();
-
-  return { sessionId: session.sessionId, home: await readHome(sftp) };
-}
-/* c8 ignore stop */
-
 // Активность «продлевает» сессию: touch() вызывается трансферами и операциями,
 // поэтому idle-таймаут не рвёт активную передачу.
 function isSessionIdle(session, now = Date.now()) {
@@ -343,6 +400,9 @@ module.exports = {
   setEventSink,
   setHostKeyVerifier,
   buildConnectConfig,
+  buildAuthCandidates,
+  isAuthError,
+  mapConnectError,
   connect,
   disconnect,
   killAll,
